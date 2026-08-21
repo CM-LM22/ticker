@@ -1,0 +1,53 @@
+name: EDGAR-Abdeckungstest
+
+# Nur von Hand. Der Test beantwortet die Frage, welche Titel der
+# Watchlist ueberhaupt kostenlos abzudecken sind, und muss nur laufen,
+# wenn sich die Watchlist aendert.
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Ergebnis nach docs/ committen'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      - name: Abdeckung messen
+        env:
+          # Repository-Secret. EDGAR verlangt Projektname und
+          # Kontakt-E-Mail im User-Agent, sonst HTTP 403.
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: npm run coverage:edgar
+
+      - name: Ergebnis committen
+        if: ${{ inputs.commit }}
+        run: |
+          if [ -z "$(git status --porcelain docs/)" ]; then
+            echo "Keine Aenderung an docs/."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/coverage.md docs/coverage.json
+          git commit -m "docs: EDGAR-Abdeckungstest aktualisiert"
+          git push
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: docs/coverage.*
