@@ -54,8 +54,12 @@ Ratings kommen als Momentaufnahme, nie als Strom. Der Strom entsteht durch
 
 - Secrets nur in GitHub-Actions-Secrets und in Vercel, niemals im Repository.
   `.env.example` enthaelt Namen, keine Werte.
-- Actions-Minuten sind ein knappes Kontingent und werden von CI **und**
-  Poller geteilt. Wer einen Workflow hinzufuegt, rechnet die Minuten vor.
+- Das Repository ist oeffentlich, Actions-Minuten sind damit unbegrenzt
+  frei und der Poller laeuft im 15-Minuten-Takt. Wer das Repository auf
+  privat stellt, muss den Takt auf 30 Minuten senken, sonst reissen die
+  2.000 Freiminuten.
+- Oeffentlich heisst auch: die Watchlist ist lesbar. Nichts ins
+  Repository schreiben, was nicht jeder sehen darf.
 - Postgres ist die Queue. Kein zusaetzlicher Dienst ohne zwingenden Grund;
   jeder weitere Gratis-Tarif ist ein weiteres Kontingent, das auslaufen kann.
 

@@ -38,12 +38,22 @@ hoechsten Stufe enthalten ist. Eine kostenlose offizielle EU-Quelle
 existiert nicht. Ausgeloest wird der Pfad erst, wenn der Betrieb zeigt,
 dass die Luecke stoert.
 
-## E5 GitHub Actions als Scheduler, 30-Minuten-Takt
+## E5 GitHub Actions als Scheduler, 15-Minuten-Takt
 
-Ein Lauf kostet rund eine Minute, ein privates Repository hat 2.000
-Minuten im Monat. 30 Minuten Takt ergibt rund 1.440 Minuten und passt,
-15 Minuten ergaebe rund 2.900 und passt nicht. Vercel Hobby scheidet aus:
-nur ein Cronlauf pro Tag.
+**Korrigiert am 21.08.2026.** Die urspruengliche Rechnung ging von einem
+privaten Repository mit 2.000 Freiminuten aus und kam deshalb auf einen
+30-Minuten-Takt. `CM-LM22/ticker` ist aber oeffentlich, und fuer
+oeffentliche Repositories sind Actions-Minuten auf den
+Standard-Runnern unbegrenzt frei. Die Minutenrechnung ist damit
+gegenstandslos.
+
+Entschieden: Das Repository bleibt oeffentlich, der Poller laeuft im
+15-Minuten-Takt. Bewusst in Kauf genommen wird, dass die Watchlist
+oeffentlich lesbar ist. Sobald sie persoenliche Zuege bekommt, ist das
+neu abzuwaegen; die Umstellung auf privat dauert zehn Sekunden, holt
+aber nichts zurueck, was bis dahin geklont wurde.
+
+Vercel Hobby scheidet weiterhin aus: nur ein Cronlauf pro Tag.
 
 Zwei Vorbehalte, die zum Betrieb gehoeren:
 - Geplante Workflows starten unter Last regelmaessig 5 bis 15 Minuten
@@ -51,12 +61,15 @@ Zwei Vorbehalte, die zum Betrieb gehoeren:
   Stunde", nicht "in Echtzeit".
 - GitHub deaktiviert Cron-Workflows nach 60 Tagen ohne Repository-Aktivitaet.
 
-CI teilt sich dasselbe Kontingent. Deshalb laeuft in CI nur Typpruefung und
-Test, kein `next build`; gebaut wird auf Vercel.
+In CI laeuft trotzdem nur Typpruefung und Test, kein `next build`. Nicht
+mehr aus Minutengruenden, sondern weil auf Vercel ohnehin gebaut wird und
+ein zweiter Build nichts pruefen wuerde, was der erste nicht prueft.
 
-**Offen:** Bei einem oeffentlichen Repository sind Actions-Minuten
-unbegrenzt frei, der 15-Minuten-Takt waere kostenlos zu haben. Secrets
-liegen ohnehin in Actions-Secrets. Noch nicht entschieden.
+Was bei einem oeffentlichen Repository zusaetzlich gilt: Secrets bleiben
+verborgen, werden in Logs geschwaerzt und stehen Pull Requests aus
+fremden Forks nicht zur Verfuegung. `workflow_dispatch` laesst sich nur
+mit Schreibrechten ausloesen. Der Abdeckungstest ist also nicht von
+aussen anstossbar.
 
 ## E6 Postgres ist die Queue
 
