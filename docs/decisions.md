@@ -105,3 +105,92 @@ Die Sandbox, in der Slice 0 entstanden ist, hat keinen Netzzugang zu
 `sec.gov`. Der Test ist deshalb als Skript plus Actions-Workflow gebaut und
 nicht als einmalige Handmessung: er ist reproduzierbar, versioniert und
 laeuft dort, wo Egress erlaubt ist.
+
+## E12 Aus der Alert-App wird ein Research-Dashboard
+
+Gewuenscht sind Kurse, 52-Wochen-Verlauf, Termine, Zusammenfassungen der
+letzten Berichte und daraus abgeleitet eine Einschaetzung, welche Titel
+interessant sind. Das ist eine Erweiterung des Produkts, nicht nur ein
+weiterer Slice: die Alerts bleiben, aber der Schwerpunkt verschiebt sich
+von "melde mir Ereignisse" zu "zeig mir den Stand".
+
+Folge fuer die Reihenfolge: Kurse und Kennzahlen sind wertvoller, wenn
+man sie sieht, als wenn sie im Hintergrund alarmieren. Deshalb kommt die
+Ansicht vor der Zustellung.
+
+## E13 Kurse ueber Stooq
+
+Tages-CSV, kein Schluessel, keine Anmeldung, amerikanische und deutsche
+Titel. Damit sind auch die 16 DAX-Titel ohne SEC-Registrierung mit
+Kursen abgedeckt, wenn auch ohne Bilanzzahlen.
+
+Verworfen: Alpha Vantage im Gratis-Tarif mit 25 Abrufen pro Tag, das
+reicht bei 40 Titeln nicht fuer einen einzigen vollstaendigen Lauf. Die
+inoffizielle Yahoo-Schnittstelle waere ergiebiger, ist aber
+undokumentiert und kann jederzeit verschwinden; als Ausweichquelle
+vorgemerkt, nicht als Fundament.
+
+Die Faehigkeitsbeschreibung von Stooq steht auf `vendor_claim`, bis
+`npm run coverage:data` gemessen hat, wie viele der 40 Titel wirklich
+geliefert werden. Erst dann `measured`.
+
+## E14 Bilanzzahlen ueber die XBRL-Schnittstelle der SEC
+
+Wer bei der SEC einreicht, liefert seine Zahlen maschinenlesbar mit.
+`companyfacts` gibt Umsatz, Nettoergebnis und Ergebnis je Aktie ohne
+Schluessel und ohne Kontingent heraus. Das ist die kostenlose Antwort auf
+"Zusammenfassung der letzten Berichte" und gilt fuer alle 24 Titel mit
+SEC-Registrierung.
+
+Zwei Grenzen, die bleiben: Es gilt, was das Unternehmen selbst getaggt
+hat, und Konzepte heissen je nach Taxonomie anders. Deshalb die
+Prioritaetslisten in `src/providers/sec-xbrl.ts`. Kumulierte Halbjahres-
+und Neunmonatswerte werden an ihrer Dauer erkannt und aussortiert; ohne
+das vergleicht man Neunmonats- mit Quartalsumsatz.
+
+## E15 Zahlentermine werden geschaetzt, nicht gekauft
+
+Ein verlaesslicher Earnings-Kalender ist kostenlos schwer zu bekommen.
+Der Einreichungsverlauf bei EDGAR ist es nicht. Unternehmen berichten
+Jahr fuer Jahr zu erstaunlich aehnlichen Kalenderterminen, deshalb
+schaetzt `estimateNextEarnings` den naechsten Termin aus dem Vorjahres-
+termin plus einem Jahr.
+
+Entscheidend ist die Selbstpruefung: dieselbe Regel wird rueckwirkend auf
+die bekannten Termine angewendet und der Fehler gemessen. Angezeigt wird
+nicht nur ein Datum, sondern ein Korridor und die gemessene
+Treffsicherheit. Eine ausgewiesene Schaetzung ist ehrlicher als ein
+Termin, der so tut, als sei er bestaetigt.
+
+Damit wird Slice 3 kleiner: ein bezahlter Kalender muss nur noch besser
+sein als diese Schaetzung, nicht besser als nichts.
+
+## E16 Die Punktzahl ist eine Rangfolge, keine Empfehlung
+
+`screen()` verdichtet sechs gewichtete Signale zu einer Zahl von 0 bis
+100. Drei Regeln machen den Unterschied zwischen einer nachvollziehbaren
+Rangfolge und einem Orakel:
+
+- Jedes Signal zeigt Rohwert, Gewicht, Normierung und Begruendung an.
+  Wer die Zahl nicht nachrechnen kann, soll ihr nicht glauben muessen.
+- Fehlende Daten zaehlen nicht als null. Ein Titel ohne Bilanzzahlen ist
+  kein schlechter Titel, sondern ein unbekannter. Stattdessen wird
+  `coverage` ausgewiesen und ueberall mit angezeigt.
+- Zwei Kennzahlen bekommen bewusst kein Gewicht: die Position im
+  52-Wochen-Band und der Abstand zum Hoch. Beide sind zweideutig. Nah am
+  Tief ist ein Schnaeppchen oder ein Warnzeichen, und welches von beidem,
+  entscheidet keine Formel.
+
+Die Auswahl der Kriterien ist eine Setzung, keine Erkenntnis. Der
+Disclaimer bleibt.
+
+## E17 Demodaten sind erkennbar erfunden
+
+Solange keine Datenbank angebunden ist, speist sich die Oberflaeche aus
+`src/demo/`. Die Reihen entstehen aus einem festen Zufallsgenerator, sind
+also reproduzierbar, und jede Seite sagt oben an, dass sie erfunden sind.
+
+Bewusst nachgebildet wird auch die Luecke: Titel ohne SEC-Registrierung
+bekommen in der Demo Kurse, aber keine Bilanzzahlen und keinen
+Termin. Eine Demo, die vollstaendiger aussieht als die Wirklichkeit,
+waere die schlechtere Demo.

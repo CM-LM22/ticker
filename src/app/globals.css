@@ -5,6 +5,10 @@
   --muted: #5d6470;
   --line: #e2e5ea;
   --accent: #1f6feb;
+  --pos: #14804a;
+  --neg: #c1392d;
+  --warn-bg: #fff8e6;
+  --warn-line: #e8d59a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -14,6 +18,10 @@
     --muted: #9aa2ae;
     --line: #262b33;
     --accent: #6ea8fe;
+    --pos: #3fb27f;
+    --neg: #e5786d;
+    --warn-bg: #2a2313;
+    --warn-line: #4d4222;
   }
 }
 
@@ -90,4 +98,197 @@ th {
   border-radius: 0.5rem;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* --- Uebersicht und Detailseite ------------------------------------ */
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-size: 0.85em;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.footnote {
+  font-size: 0.82rem;
+  margin-top: 0.75rem;
+}
+
+.back {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+}
+
+.up {
+  color: var(--pos);
+}
+
+.down {
+  color: var(--neg);
+}
+
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.overview td {
+  vertical-align: middle;
+}
+
+.demo-banner {
+  margin: 0 0 1.5rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.sparkline {
+  display: block;
+  width: 120px;
+  height: 28px;
+  overflow: visible;
+}
+
+.chart {
+  margin: 1.5rem 0 0.5rem;
+}
+
+.chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-line.up,
+.range-marker {
+  stroke: var(--pos);
+}
+
+.chart-line.down {
+  stroke: var(--neg);
+}
+
+.chart-area {
+  stroke: none;
+  opacity: 0.1;
+}
+
+.chart-area.up {
+  fill: var(--pos);
+}
+
+.chart-area.down {
+  fill: var(--neg);
+}
+
+.chart figcaption {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding-top: 0.3rem;
+}
+
+.range {
+  margin: 1.25rem 0 0.5rem;
+}
+
+.range-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--line), var(--accent));
+}
+
+.range-marker {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 14px;
+  background: var(--fg);
+  transform: translateX(-1px);
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding-top: 0.35rem;
+}
+
+.range-labels strong {
+  color: var(--fg);
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+}
+
+.figures div {
+  border-top: 1px solid var(--line);
+  padding-top: 0.4rem;
+}
+
+.figures dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.figures dd {
+  margin: 0.1rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.warnings {
+  margin: 1rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 42rem) {
+  table.overview {
+    font-size: 0.8rem;
+  }
+
+  .sparkline {
+    width: 70px;
+  }
+}
+
+td.num,
+th.num,
+.figures dd {
+  white-space: nowrap;
 }

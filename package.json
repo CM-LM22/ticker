@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage:edgar": "tsx scripts/edgar-coverage.ts"
+    "coverage:edgar": "tsx scripts/edgar-coverage.ts",
+    "coverage:data": "tsx scripts/data-coverage.ts"
   },
   "dependencies": {
     "next": "^15.5.4",

@@ -1,5 +1,7 @@
 import type { FilingForm, MarketEvent } from '../domain/event'
+import type { ReportedPeriod } from '../domain/fundamentals'
 import type { WatchlistEntry } from '../domain/instrument'
+import type { PriceSeries } from '../domain/price-series'
 import type { RatingsSnapshot } from '../domain/ratings-diff'
 
 /**
@@ -10,7 +12,7 @@ import type { RatingsSnapshot } from '../domain/ratings-diff'
  */
 export interface ProviderCapabilities {
   readonly id: string
-  readonly kind: 'filings' | 'earnings_calendar' | 'ratings' | 'notifier'
+  readonly kind: 'filings' | 'earnings_calendar' | 'ratings' | 'notifier' | 'prices' | 'fundamentals'
   readonly coversUsListings: boolean
   /**
    * Deckt Titel ohne US-Notierung ab. Genau hier scheitern die Free
@@ -120,4 +122,22 @@ export interface DeliveryResult {
 export interface Notifier {
   readonly capabilities: ProviderCapabilities
   send(alert: Alert): Promise<DeliveryResult>
+}
+
+export interface PriceRequest {
+  readonly instrument: WatchlistEntry
+  /** Aelteste gewuenschte Handelstag, YYYY-MM-DD. */
+  readonly since: string
+}
+
+export interface PriceProvider {
+  readonly capabilities: ProviderCapabilities
+  /** Tageskurse, aufsteigend sortiert. */
+  fetchDailyHistory(request: PriceRequest): Promise<PriceSeries>
+}
+
+export interface FundamentalsProvider {
+  readonly capabilities: ProviderCapabilities
+  /** Berichtsperioden aus den veroeffentlichten Abschluessen. */
+  fetchReportedPeriods(instrument: WatchlistEntry): Promise<readonly ReportedPeriod[]>
 }
