@@ -97,6 +97,10 @@ export default function Home() {
         Empfehlung; die Gewichte stehen auf jeder Detailseite.
       </p>
 
+      <form method="post" action="/api/logout" className="logout">
+        <button type="submit">Abmelden</button>
+      </form>
+
       <Disclaimer />
     </main>
   )

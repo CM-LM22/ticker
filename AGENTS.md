@@ -63,6 +63,14 @@ Ratings kommen als Momentaufnahme, nie als Strom. Der Strom entsteht durch
 - Postgres ist die Queue. Kein zusaetzlicher Dienst ohne zwingenden Grund;
   jeder weitere Gratis-Tarif ist ein weiteres Kontingent, das auslaufen kann.
 
+## Zugang zur Oberflaeche
+
+Die gesamte Oberflaeche liegt hinter einem Passwort-Gate
+(`src/middleware.ts`). Wer eine neue Route hinzufuegt, prueft, ob sie in
+die Ausnahmeliste gehoert; im Zweifel gehoert sie es nicht. Ohne
+`APP_PASSWORD` schliesst die Anwendung in der Produktion, statt offen zu
+stehen. Diese Richtung nie umdrehen.
+
 ## Schichten
 
 `Ingestion -> Normalisierung -> Matching -> Zustellung`. Jede Schicht kennt

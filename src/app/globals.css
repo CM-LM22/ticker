@@ -292,3 +292,67 @@ th.num,
 .figures dd {
   white-space: nowrap;
 }
+
+/* --- Anmeldung ----------------------------------------------------- */
+
+main.login {
+  max-width: 24rem;
+  padding-top: 5rem;
+}
+
+main.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 1.5rem;
+}
+
+main.login label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+main.login input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+main.login input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+main.login button {
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.login-error {
+  margin-top: 0.9rem;
+  color: var(--neg);
+  font-size: 0.88rem;
+}
+
+.logout {
+  margin-top: 2.5rem;
+}
+
+.logout button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}

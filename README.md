@@ -19,6 +19,20 @@ npm run typecheck
 npm run dev       # Uebersichtsseite unter http://localhost:3000
 ```
 
+## Zugang
+
+Die Oberflaeche liegt hinter einem Passwort. Gesetzt wird es ueber
+`APP_PASSWORD`, lokal in `.env.local`, im Betrieb in den
+Umgebungsvariablen von Vercel:
+
+```sh
+APP_PASSWORD="langes-zufaelliges-passwort"
+```
+
+Ohne die Variable ist in der Produktion keine Seite erreichbar; das ist
+Absicht. In der Entwicklung laesst die Middleware ohne Passwort durch.
+Ein Passwortwechsel meldet alle Browser ab.
+
 ## Abdeckungstests
 
 Beantworten empirisch, was kostenlos ueberhaupt zu bekommen ist. Erst
@@ -42,7 +56,8 @@ Actions.
 | `src/domain/` | Ereignismodell, Idempotency-Key, Ratings-Diff, Matching, 52-Wochen-Auswertung, Bilanzkennzahlen, Terminschaetzung, Punktzahl. Rein, ohne I/O. |
 | `src/providers/` | Anbieter-Interfaces samt Faehigkeitsbeschreibung, Stooq- und XBRL-Adapter, Attrappen. |
 | `src/demo/` | Erfundene Daten fuer die Oberflaeche, bis Slice 6 sie ersetzt. |
-| `src/lib/` | Anzeigeformate und Chart-Geometrie. |
+| `src/lib/` | Anzeigeformate, Chart-Geometrie, Sitzungs-Token. |
+| `src/middleware.ts` | Passwort-Gate vor allen Routen. |
 | `src/config/watchlist.ts` | Die 40 beobachteten Titel. |
 | `src/db/schema.sql` | Postgres-Schema inklusive Queue-Semantik. Noch nicht migriert. |
 | `scripts/edgar-coverage.ts` | Abdeckungstest gegen EDGAR. |

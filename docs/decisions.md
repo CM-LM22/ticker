@@ -207,3 +207,41 @@ Bewusst nachgebildet wird auch die Luecke: Titel ohne SEC-Registrierung
 bekommen in der Demo Kurse, aber keine Bilanzzahlen und keinen
 Termin. Eine Demo, die vollstaendiger aussieht als die Wirklichkeit,
 waere die schlechtere Demo.
+
+## E18 Passwortschutz in der Anwendung, nicht bei Vercel
+
+Die Oberflaeche soll oeffentlich erreichbar, aber nicht oeffentlich
+lesbar sein. Vercel bietet auf dem Hobby-Tarif nur *Vercel
+Authentication*, und das schuetzt allein Preview-Deployments und die
+technischen Deployment-URLs; die Produktionsdomain bleibt offen. Echter
+Passwortschutz beginnt bei Enterprise beziehungsweise einem Zusatzpaket
+fuer 150 Dollar im Monat. Fuer ein privates Dashboard ist das keine
+Option.
+
+Gebaut wurde daher das, was Vercel fuer diesen Fall selbst empfiehlt: ein
+Gate in der Anwendung. Eine Middleware vor allen Routen, Passwort in
+`APP_PASSWORD`, nach der Eingabe ein signiertes Cookie.
+
+Entscheidungen im Detail:
+
+- **Der Signaturschluessel ist das Passwort selbst.** Damit gibt es nur
+  ein Geheimnis zu verwalten, und ein Passwortwechsel macht alle
+  bestehenden Sitzungen ungueltig, ohne dass es dafuer einen zweiten
+  Schalter braucht.
+- **Ohne `APP_PASSWORD` wird in der Produktion geschlossen**, nicht
+  durchgewunken: HTTP 503 mit Klartexthinweis. Ein unbemerkt offenes
+  Dashboard ist schlimmer als ein sichtbar kaputtes. In der Entwicklung
+  laesst die Middleware durch, dort waere das Gate nur laestig.
+- **Vergleiche laufen ohne Zeitunterschied**, sowohl fuer das Passwort
+  als auch fuer die Signatur.
+- **Weiterleitungsziele werden geprueft.** Ohne das waere
+  `/login?weiter=//fremde.seite` eine offene Weiterleitung.
+
+Bewusst nicht gebaut: eine Sperre nach zu vielen Fehlversuchen. Auf einer
+Plattform ohne gemeinsamen Zustand zwischen Aufrufen waere ein Zaehler im
+Speicher wirkungslos, und ein Zaehler in Postgres kostet bei jedem
+Seitenaufruf eine Abfrage. Der Ersatz ist ein langes, zufaelliges
+Passwort; der Hinweis steht in `.env.example`.
+
+Unberuehrt davon bleibt E5: Das Repository ist oeffentlich, die Website
+ist es nicht. Das sind zwei Schalter.
