@@ -356,3 +356,12 @@ main.login button {
   font-size: 0.8rem;
   cursor: pointer;
 }
+
+.source-banner {
+  margin: 0 0 1.5rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}

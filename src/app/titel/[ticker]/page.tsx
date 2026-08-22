@@ -1,11 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { DemoBanner } from '@/components/DemoBanner'
+import { DataBanner } from '@/components/DataBanner'
 import { Disclaimer } from '@/components/Disclaimer'
 import { PriceChart } from '@/components/PriceChart'
 import { RangeBar } from '@/components/RangeBar'
 import { WATCHLIST } from '@/config/watchlist'
-import { buildDemoTitles, DEMO_AS_OF } from '@/demo/demo-data'
+import { loadTitles } from '@/data/titles'
 import { RETURN_WINDOWS, window52Weeks } from '@/domain/price-series'
 import {
   formatCompact,
@@ -16,25 +16,35 @@ import {
   formatPrice,
 } from '@/lib/format'
 
+export const dynamic = 'force-static'
+
 export function generateStaticParams() {
   return WATCHLIST.map((entry) => ({ ticker: entry.ticker.toLowerCase() }))
 }
 
-const CONFIDENCE_LABEL: Record<'hoch' | 'mittel' | 'niedrig', string> = {
+const CONFIDENCE_LABEL = {
   hoch: 'hohe Treffsicherheit',
   mittel: 'mittlere Treffsicherheit',
   niedrig: 'geringe Treffsicherheit',
-}
+} as const
+
+const PERIODICITY_LABEL = {
+  quarterly: 'Quartalsrhythmus',
+  semiannual: 'Halbjahresrhythmus',
+  annual: 'Jahresrhythmus',
+  unklar: 'unklaren Rhythmus',
+} as const
 
 export default async function TitlePage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params
-  const title = buildDemoTitles().find(
+  const data = loadTitles()
+  const title = data.titles.find(
     (candidate) => candidate.entry.ticker.toLowerCase() === ticker.toLowerCase(),
   )
   if (title === undefined) notFound()
 
-  const { entry, price, fundamentals, earnings, screen: result } = title
-  const bars52 = window52Weeks(title.series, DEMO_AS_OF)
+  const { entry, price, fundamentals, earnings, screen: result, series } = title
+  const bars52 = series === null ? [] : window52Weeks(series, data.asOf)
 
   return (
     <main>
@@ -46,75 +56,106 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
         {entry.ticker} <span className="muted">{entry.name}</span>
       </h1>
       <p className="lede">
-        {entry.venue} · {formatPrice(price.last.close, price.currency)} ·{' '}
-        <span className={(price.returns['12M'] ?? 0) >= 0 ? 'up' : 'down'}>
-          {formatPercent(price.returns['12M'])} in zwoelf Monaten
-        </span>
+        {entry.venue}
+        {price !== null && (
+          <>
+            {' · '}
+            {formatPrice(price.last.close, price.currency)}
+            {' · '}
+            <span className={(price.returns['12M'] ?? 0) >= 0 ? 'up' : 'down'}>
+              {formatPercent(price.returns['12M'])} in zwoelf Monaten
+            </span>
+          </>
+        )}
       </p>
 
-      <DemoBanner />
-
-      <PriceChart bars={bars52} currency={price.currency} />
-      <RangeBar
-        low={price.low52.value}
-        high={price.high52.value}
-        last={price.last.close}
-        position={price.positionInRange}
-        currency={price.currency}
+      <DataBanner
+        isDemo={data.isDemo}
+        asOf={data.asOf}
+        priceSource={data.priceSource}
+        fundamentalsSource={data.fundamentalsSource}
       />
 
-      <h2>Kennzahlen zum Kurs</h2>
-      <dl className="figures">
-        <div>
-          <dt>52-Wochen-Hoch</dt>
-          <dd>
-            {formatNumber(price.high52.value, 2)} {price.currency}
-            <span className="muted"> am {formatDay(price.high52.date)}</span>
-          </dd>
-        </div>
-        <div>
-          <dt>52-Wochen-Tief</dt>
-          <dd>
-            {formatNumber(price.low52.value, 2)} {price.currency}
-            <span className="muted"> am {formatDay(price.low52.date)}</span>
-          </dd>
-        </div>
-        <div>
-          <dt>Abstand zum Hoch</dt>
-          <dd>{formatPercent(price.drawdownFromHighPct)}</dd>
-        </div>
-        {RETURN_WINDOWS.map((window) => (
-          <div key={window}>
-            <dt>Rendite {window}</dt>
-            <dd className={(price.returns[window] ?? 0) >= 0 ? 'up' : 'down'}>
-              {formatPercent(price.returns[window])}
-            </dd>
-          </div>
-        ))}
-        <div>
-          <dt>50-Tage-Schnitt</dt>
-          <dd>{price.sma50 === null ? '—' : formatNumber(price.sma50, 2)}</dd>
-        </div>
-        <div>
-          <dt>200-Tage-Schnitt</dt>
-          <dd>{price.sma200 === null ? '—' : formatNumber(price.sma200, 2)}</dd>
-        </div>
-        <div>
-          <dt>Schwankung p. a.</dt>
-          <dd>{price.volatilityPct === null ? '—' : `${formatNumber(price.volatilityPct, 0)} %`}</dd>
-        </div>
-        <div>
-          <dt>Handelstage im Fenster</dt>
-          <dd>{price.bars}</dd>
-        </div>
-      </dl>
-
-      {price.warnings.length > 0 && (
+      {title.notes.length > 0 && (
         <ul className="warnings">
-          {price.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
+          {title.notes.map((note) => (
+            <li key={note}>{note}</li>
           ))}
         </ul>
+      )}
+
+      {price === null ? (
+        <p className="muted">
+          Fuer {entry.ticker} liegen keine Kurse vor. Der Abruf ist entweder noch nicht gelaufen
+          oder die Quelle fuehrt diesen Titel nicht.
+        </p>
+      ) : (
+        <>
+          <PriceChart bars={bars52} currency={price.currency} />
+          <RangeBar
+            low={price.low52.value}
+            high={price.high52.value}
+            last={price.last.close}
+            position={price.positionInRange}
+            currency={price.currency}
+          />
+
+          <h2>Kennzahlen zum Kurs</h2>
+          <dl className="figures">
+            <div>
+              <dt>52-Wochen-Hoch</dt>
+              <dd>
+                {formatNumber(price.high52.value, 2)} {price.currency}
+                <span className="muted"> am {formatDay(price.high52.date)}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>52-Wochen-Tief</dt>
+              <dd>
+                {formatNumber(price.low52.value, 2)} {price.currency}
+                <span className="muted"> am {formatDay(price.low52.date)}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Abstand zum Hoch</dt>
+              <dd>{formatPercent(price.drawdownFromHighPct)}</dd>
+            </div>
+            {RETURN_WINDOWS.map((window) => (
+              <div key={window}>
+                <dt>Rendite {window}</dt>
+                <dd className={(price.returns[window] ?? 0) >= 0 ? 'up' : 'down'}>
+                  {formatPercent(price.returns[window])}
+                </dd>
+              </div>
+            ))}
+            <div>
+              <dt>50-Tage-Schnitt</dt>
+              <dd>{price.sma50 === null ? '—' : formatNumber(price.sma50, 2)}</dd>
+            </div>
+            <div>
+              <dt>200-Tage-Schnitt</dt>
+              <dd>{price.sma200 === null ? '—' : formatNumber(price.sma200, 2)}</dd>
+            </div>
+            <div>
+              <dt>Schwankung p. a.</dt>
+              <dd>
+                {price.volatilityPct === null ? '—' : `${formatNumber(price.volatilityPct, 0)} %`}
+              </dd>
+            </div>
+            <div>
+              <dt>Handelstage im Fenster</dt>
+              <dd>{price.bars}</dd>
+            </div>
+          </dl>
+
+          {price.warnings.length > 0 && (
+            <ul className="warnings">
+              {price.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       <h2>Naechste Zahlen</h2>
@@ -124,19 +165,13 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
         </p>
       ) : (
         <p>
-          <strong>{formatDay(earnings.expected)}</strong> ({formatDaysUntil(earnings.expected, DEMO_AS_OF)}),
-          plausibel zwischen {formatDay(earnings.earliest)} und {formatDay(earnings.latest)}.
+          <strong>{formatDay(earnings.expected)}</strong> (
+          {formatDaysUntil(earnings.expected, data.asOf)}), plausibel zwischen{' '}
+          {formatDay(earnings.earliest)} und {formatDay(earnings.latest)}.
           <br />
           <span className="muted">
             Geschaetzt aus {earnings.basis} vergangenen Terminen im{' '}
-            {earnings.periodicity === 'quarterly'
-              ? 'Quartalsrhythmus'
-              : earnings.periodicity === 'semiannual'
-                ? 'Halbjahresrhythmus'
-                : earnings.periodicity === 'annual'
-                  ? 'Jahresrhythmus'
-                  : 'unklaren Rhythmus'}
-            . Dieselbe Regel lag rueckwirkend im Mittel{' '}
+            {PERIODICITY_LABEL[earnings.periodicity]}. Dieselbe Regel lag rueckwirkend im Mittel{' '}
             {earnings.medianErrorDays === null
               ? '—'
               : `${formatNumber(earnings.medianErrorDays, 0)} Tage`}{' '}
@@ -161,11 +196,12 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
                 <th className="num">Umsatz</th>
                 <th className="num">Nettoergebnis</th>
                 <th className="num">Marge</th>
-                <th className="num">Ergebnis je Aktie</th>
+                <th className="num">je Aktie</th>
+                <th>Quelle</th>
               </tr>
             </thead>
             <tbody>
-              {fundamentals.periods.slice(0, 6).map((period) => (
+              {fundamentals.periods.slice(0, 8).map((period) => (
                 <tr key={`${period.frame}:${period.periodEnd}`}>
                   <td>
                     {period.label}
@@ -181,6 +217,15 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
                   </td>
                   <td className="num">
                     {period.epsDiluted === null ? '—' : formatNumber(period.epsDiluted, 2)}
+                  </td>
+                  <td>
+                    {period.sourceUrl === null ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <a href={period.sourceUrl} target="_blank" rel="noreferrer noopener">
+                        EDGAR
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -203,6 +248,14 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
                   )} Prozentpunkte)`}
               .
             </p>
+          )}
+
+          {fundamentals.warnings.length > 0 && (
+            <ul className="warnings">
+              {fundamentals.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
           )}
         </>
       )}

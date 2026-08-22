@@ -14,19 +14,21 @@
 import { writeFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { WATCHLIST } from '../src/config/watchlist'
-import { normalizeCik } from '../src/domain/instrument'
 import type { CoverageExpectation, WatchlistEntry } from '../src/domain/instrument'
+import {
+  COMPANY_TICKERS_URL,
+  CompanyTickersSchema,
+  buildCikIndex,
+  requireUserAgent,
+  resolveCik,
+  sleep,
+} from './lib/edgar'
+import type { CikIndex, Resolution } from './lib/edgar'
 
-const COMPANY_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json'
 const WINDOW_MONTHS = 24
 /** Erlaubt sind 10 Anfragen pro Sekunde. Wir bleiben deutlich darunter. */
 const REQUEST_DELAY_MS = 150
 const MAX_RETRIES = 3
-
-const CompanyTickersSchema = z.record(
-  z.string(),
-  z.object({ cik_str: z.number(), ticker: z.string(), title: z.string() }),
-)
 
 const RecentFilingsSchema = z.object({
   accessionNumber: z.array(z.string()),
@@ -47,12 +49,6 @@ const SubmissionsSchema = z.object({
 
 type Submissions = z.infer<typeof SubmissionsSchema>
 
-interface Resolution {
-  cik: string
-  secName: string
-  via: 'ticker' | 'name'
-}
-
 interface CoverageRow {
   ticker: string
   name: string
@@ -69,23 +65,6 @@ interface CoverageRow {
   measured: CoverageExpectation
   verdict: 'ok' | 'abweichung'
   note: string | null
-}
-
-function requireUserAgent(): string {
-  const userAgent = process.env['SEC_USER_AGENT']?.trim()
-  if (userAgent === undefined || userAgent.length === 0) {
-    throw new Error(
-      'SEC_USER_AGENT fehlt. EDGAR verlangt Projektname und Kontakt-E-Mail, sonst HTTP 403.',
-    )
-  }
-  if (!userAgent.includes('@')) {
-    throw new Error(`SEC_USER_AGENT enthaelt keine Kontakt-E-Mail: ${userAgent}`)
-  }
-  return userAgent
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function getJson(url: string, userAgent: string): Promise<unknown> {
@@ -113,47 +92,6 @@ async function getJson(url: string, userAgent: string): Promise<unknown> {
     }
   }
   throw lastError instanceof Error ? lastError : new Error(`Abruf fehlgeschlagen: ${url}`)
-}
-
-/** Rechtsformen weg, damit "SAP SE" und "SAP" denselben Kern haben. */
-function nameKey(name: string): string {
-  return name
-    .toUpperCase()
-    .replace(/[.,]/g, '')
-    .replace(/\b(AG|SE|NV|N V|PLC|SA|KGAA|INC|CORP|CORPORATION|CO|COMPANY|HOLDING|HOLDINGS|GROUP|GMBH|& CO)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function resolve(
-  entry: WatchlistEntry,
-  byTicker: Map<string, { cik: string; title: string }>,
-  byNameKey: { key: string; cik: string; title: string }[],
-): Resolution | null {
-  // Bei XETRA-Titeln niemals das lokale Kuerzel gegen EDGAR halten:
-  // ADS ist an XETRA adidas und war in den USA ein voellig anderes
-  // Unternehmen. Ein falscher Treffer waere schlimmer als keiner.
-  const tickerCandidates =
-    entry.venue === 'XETRA'
-      ? entry.secTickerHint === undefined
-        ? []
-        : [entry.secTickerHint]
-      : [entry.secTickerHint ?? entry.ticker]
-
-  for (const candidate of tickerCandidates) {
-    const hit = byTicker.get(candidate.toUpperCase())
-    if (hit !== undefined) return { cik: hit.cik, secName: hit.title, via: 'ticker' }
-  }
-
-  const key = nameKey(entry.name)
-  if (key.length >= 4) {
-    const matches = byNameKey.filter((row) => row.key.startsWith(key) || key.startsWith(row.key))
-    const only = matches[0]
-    if (matches.length === 1 && only !== undefined) {
-      return { cik: only.cik, secName: only.title, via: 'name' }
-    }
-  }
-  return null
 }
 
 const FORMS_OF_INTEREST = ['8-K', '6-K', '10-Q', '10-K', '20-F'] as const
@@ -240,21 +178,13 @@ async function main(): Promise<void> {
   console.log(`Abdeckungstest gegen EDGAR, Fenster ${WINDOW_MONTHS} Monate, ${WATCHLIST.length} Titel.`)
 
   const rawTickers = await getJson(COMPANY_TICKERS_URL, userAgent)
-  const companies = CompanyTickersSchema.parse(rawTickers)
-
-  const byTicker = new Map<string, { cik: string; title: string }>()
-  const byNameKey: { key: string; cik: string; title: string }[] = []
-  for (const company of Object.values(companies)) {
-    const cik = normalizeCik(company.cik_str)
-    byTicker.set(company.ticker.toUpperCase(), { cik, title: company.title })
-    byNameKey.push({ key: nameKey(company.title), cik, title: company.title })
-  }
-  console.log(`${byTicker.size} Kuerzel aus company_tickers.json geladen.`)
+  const index: CikIndex = buildCikIndex(CompanyTickersSchema.parse(rawTickers))
+  console.log(`${index.byTicker.size} Kuerzel aus company_tickers.json geladen.`)
 
   const rows: CoverageRow[] = []
   for (const entry of WATCHLIST) {
     await sleep(REQUEST_DELAY_MS)
-    const resolution = resolve(entry, byTicker, byNameKey)
+    const resolution: Resolution | null = resolveCik(entry, index)
 
     if (resolution === null) {
       rows.push({
