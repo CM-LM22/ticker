@@ -45,6 +45,7 @@ Dafuer braucht es in Vercel unter *Settings, Environment Variables*:
 | `TWELVEDATA_API_KEY` | Kurse |
 | `SEC_USER_AGENT` | Berichtszahlen, Form `projekt/0.1 (mail@example.com)` |
 | `FINNHUB_API_KEY` | Live-Kurse und Analystenkonsens, kostenloser Schluessel |
+| `ALPHA_VANTAGE_API_KEY` | Tageskurse der DAX-Titel (XETRA, Euro), kostenloser Schluessel |
 | `CRON_SECRET` | nur damit Vercel Cron ohne Anmeldung durchkommt |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Push bei neuen Analystenmeldungen, optional |
 

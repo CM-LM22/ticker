@@ -24,6 +24,7 @@ import { abrufIstFrisch, kurseSindFrisch } from '@/domain/freshness'
 import type { ReportedPeriod } from '@/domain/fundamentals'
 import type { WatchlistEntry } from '@/domain/instrument'
 import { trendToAction } from '@/domain/trend-diff'
+import { AlphaVantagePriceProvider } from '@/providers/alphavantage'
 import {
   fetchFinnhubJson,
   finnhubSymbolFor,
@@ -65,11 +66,14 @@ const HISTORY_DAYS = 420
  * Stapel geschnitten sind.
  */
 const TWELVEDATA_ABSTAND_MS = 8_000
+/** Alpha Vantage erlaubt 5 je Minute; 15 Sekunden sind sicher darunter. */
+const ALPHAVANTAGE_ABSTAND_MS = 15_000
 /** Hoechstens so viele Kettenglieder je Cron-Anstoss, als Notbremse. */
 const MAX_KETTE = 12
 
 let cikIndexCache: CikIndex | null = null
 let letzterTwelveDataAbruf = 0
+let letzterAlphaVantageAbruf = 0
 
 interface Ergebnis {
   ticker: string
@@ -106,6 +110,12 @@ async function twelveDataTakt(): Promise<void> {
   letzterTwelveDataAbruf = Date.now()
 }
 
+async function alphaVantageTakt(): Promise<void> {
+  const wartezeit = letzterAlphaVantageAbruf + ALPHAVANTAGE_ABSTAND_MS - Date.now()
+  if (wartezeit > 0) await sleep(wartezeit)
+  letzterAlphaVantageAbruf = Date.now()
+}
+
 /**
  * Kurse fuer einen Titel. XETRA wird zuerst direkt versucht; scheitert
  * das endgueltig (kein Ratenlimit) und es gibt eine US-Notierung, wird
@@ -118,27 +128,68 @@ async function holeKurse(
   uebersprungen: string[],
 ): Promise<{ bars: number; hinweis: string | null }> {
   const heute = new Date()
-  if (kurseSindFrisch(await latestBarDay(entry.ticker), heute)) {
+  const neuesterTag = await latestBarDay(entry.ticker)
+  if (kurseSindFrisch(neuesterTag, heute)) {
     uebersprungen.push('Kurse aktuell')
     return { bars: 0, hinweis: null }
   }
 
+  // XETRA zuerst ueber Alpha Vantage: die einzige gemessen erreichbare
+  // Gratisquelle, die deutsche Titel direkt fuehrt (25 Abrufe am Tag —
+  // genug fuer die DAX-Haelfte, weil die Frische-Regel jeden Titel auf
+  // einen Abruf am Tag begrenzt). Beim ersten Mal die volle Historie,
+  // danach reicht das kompakte Fenster von 100 Tagen zum Auffuellen.
+  let alphaVantageFehler: string | null = null
+  if (entry.venue === 'XETRA') {
+    const alpha = process.env['ALPHA_VANTAGE_API_KEY']?.trim() ?? ''
+    if (alpha.length > 0) {
+      await alphaVantageTakt()
+      try {
+        const provider = new AlphaVantagePriceProvider(
+          alpha,
+          neuesterTag === null ? 'full' : 'compact',
+        )
+        const series = await provider.fetchDailyHistory({ instrument: entry, since })
+        return { bars: await saveBars(entry.ticker, series), hinweis: null }
+      } catch (fehler) {
+        alphaVantageFehler = message(fehler)
+      }
+    } else {
+      alphaVantageFehler = 'ALPHA_VANTAGE_API_KEY fehlt'
+    }
+  }
+
   const twelve = process.env['TWELVEDATA_API_KEY']?.trim() ?? ''
-  if (twelve.length === 0) throw new Error('TWELVEDATA_API_KEY fehlt')
+  if (twelve.length === 0) {
+    throw new Error(
+      alphaVantageFehler === null
+        ? 'TWELVEDATA_API_KEY fehlt'
+        : `Alpha Vantage: ${alphaVantageFehler}; TWELVEDATA_API_KEY fehlt`,
+    )
+  }
   const provider = new TwelveDataPriceProvider(twelve)
 
   await twelveDataTakt()
   try {
     const series = await provider.fetchDailyHistory({ instrument: entry, since })
-    return { bars: await saveBars(entry.ticker, series), hinweis: null }
+    return {
+      bars: await saveBars(entry.ticker, series),
+      hinweis: alphaVantageFehler === null ? null : `Alpha Vantage scheiterte (${alphaVantageFehler}), Twelve Data lieferte`,
+    }
   } catch (fehler) {
     const retryable =
       typeof fehler === 'object' && fehler !== null && 'retryable' in fehler
         ? (fehler as { retryable: boolean }).retryable
         : false
-    if (retryable || entry.venue !== 'XETRA' || entry.secTickerHint === undefined) throw fehler
+    if (retryable || entry.venue !== 'XETRA' || entry.secTickerHint === undefined) {
+      if (alphaVantageFehler !== null) {
+        throw new Error(`Alpha Vantage: ${alphaVantageFehler}; Twelve Data: ${message(fehler)}`)
+      }
+      throw fehler
+    }
 
-    // Rueckfall auf die US-Notierung, unter dem eigenen Kuerzel gespeichert.
+    // Letzter Rueckfall: die US-Notierung, unter dem eigenen Kuerzel
+    // gespeichert. Dollar-Kurse sind besser als keine.
     await twelveDataTakt()
     const ersatz: WatchlistEntry = { ...entry, ticker: entry.secTickerHint, venue: 'NYSE' }
     const series = await provider.fetchDailyHistory({ instrument: ersatz, since })

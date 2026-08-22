@@ -468,3 +468,40 @@ Stapeln stehen: companyfacts der SEC (zweistellige Megabyte je Titel)
 ging komplett durch Zod, fuenfmal je Aufruf, fuer drei am Ende genutzte
 Konzepte. Jetzt wird der Rumpf grob geprueft und nur validiert, was
 verwendet wird.
+
+## E25 DAX-Titel kommen ueber Alpha Vantage ins System
+
+Die 16 DAX-Titel ohne US-Notierung standen ohne jede Quelle da: Stooq
+und Yahoo sperren Cloud-Adressen (gemessen), Twelve Data fuehrt XETRA
+im Gratis-Tarif nicht, Finnhub auch nicht. Die Loesung ist eine Quelle,
+die frueh verworfen worden war — und die Ablehnung war richtig
+begruendet, nur zu breit angewendet: Alpha Vantage erlaubt 25 Abrufe am
+Tag, zu wenig fuer 40 Titel. Fuer die DAX-Haelfte allein reicht es
+exakt, denn die Frische-Regel begrenzt jeden Titel ohnehin auf einen
+Abruf am Tag.
+
+- XETRA-Titel laufen ueber das dokumentierte Suffix .DEX, Kurse in
+  Euro. Beim ersten Abruf die volle Historie, danach das kompakte
+  100-Tage-Fenster zum Auffuellen. 15 Sekunden Abstand zwischen
+  Abrufen (Minutenlimit 5).
+- Reihenfolge je XETRA-Titel: Alpha Vantage, dann Twelve Data XETR,
+  dann US-Notierung. Jeder Rueckfall steht als Hinweis am Titel.
+- Alpha Vantage meldet Tageslimit und Bezahlgrenzen mit HTTP 200 und
+  einem Textfeld; der Parser behandelt beide als Absage mit Wortlaut,
+  nicht als leere Reihe.
+- Der Schluessel ist kostenlos (alphavantage.co). Ohne ihn bleibt der
+  bisherige Zustand: Striche statt erfundener Zahlen.
+- 'vendor_claim', bis die Diagnose den ersten .DEX-Abruf von Vercel aus
+  gemessen hat; die Probe ist eingebaut.
+
+Zwei Zukunftspfade sind als Proben in der Diagnose, bewusst noch
+nirgends verdrahtet:
+
+- **Tradegate** (ohne Schluessel, per ISIN) koennte Live-Kurse
+  deutscher Titel liefern — das letzte Stueck Echtzeit, das den
+  DAX-Titeln fehlt.
+- **ESEF ueber filings.xbrl.org**: EU-Konzerne muessen ihre
+  Jahresabschluesse als XBRL einreichen, das Register ist offen. Das
+  ist der einzige sichtbare kostenlose Weg zu Berichtszahlen der 16 —
+  amtlich, aber nur jaehrlich, und die Zuordnung laeuft ueber LEIs.
+  Erst messen, dann bauen.

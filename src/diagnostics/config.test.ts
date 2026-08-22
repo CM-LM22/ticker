@@ -19,6 +19,7 @@ beforeEach(() => {
     'NEON_URL',
     'NEON_POSTGRES_URL',
     'TWELVEDATA_API_KEY',
+    'ALPHA_VANTAGE_API_KEY',
     'SEC_USER_AGENT',
     'CRON_SECRET',
     'FINNHUB_API_KEY',

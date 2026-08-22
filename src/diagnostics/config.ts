@@ -93,6 +93,16 @@ export function checkConfiguration(): ConfigCheck[] {
           : null,
     },
     {
+      name: 'ALPHA_VANTAGE_API_KEY',
+      gesetzt: wert('ALPHA_VANTAGE_API_KEY').length > 0,
+      pflicht: false,
+      wofuer: 'Tageskurse der DAX-Titel (XETRA, in Euro)',
+      hinweis:
+        wert('ALPHA_VANTAGE_API_KEY').length === 0
+          ? 'Ohne diesen Schluessel bleiben die 16 DAX-Titel ohne US-Notierung ohne Kurse.'
+          : null,
+    },
+    {
       name: 'CRON_SECRET',
       gesetzt: wert('CRON_SECRET').length > 0,
       pflicht: false,

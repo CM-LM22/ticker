@@ -1,3 +1,4 @@
+import { alphaVantageUrl, parseAlphaVantageDaily } from '../providers/alphavantage'
 import { parseStooqCsv, stooqUrl } from '../providers/stooq'
 import { parseTwelveDataSeries, twelveDataUrl } from '../providers/twelvedata'
 import { submissionsUrl } from './submissions'
@@ -66,6 +67,7 @@ function reihenBefund(bars: readonly { date: string; close: number }[]): string 
 export async function probeSources(): Promise<SourceProbe[]> {
   const twelve = process.env['TWELVEDATA_API_KEY']?.trim() ?? ''
   const finnhub = process.env['FINNHUB_API_KEY']?.trim() ?? ''
+  const alpha = process.env['ALPHA_VANTAGE_API_KEY']?.trim() ?? ''
   const secUserAgent = process.env['SEC_USER_AGENT']?.trim() ?? ''
 
   const proben: Promise<SourceProbe>[] = [
@@ -140,6 +142,36 @@ export async function probeSources(): Promise<SourceProbe[]> {
   }
 
   proben.push(
+    alpha.length > 0
+      ? pruefe('Alpha Vantage', 'SAP.DEX (XETRA)', async () => {
+          const daten = await json(alphaVantageUrl('SAP.DEX', alpha, 'compact'))
+          const reihe = parseAlphaVantageDaily(daten, { ticker: 'SAP', currency: 'EUR' })
+          return `${reihenBefund(reihe.bars)}, Waehrung ${reihe.currency}`
+        })
+      : Promise.resolve({
+          quelle: 'Alpha Vantage',
+          ziel: 'SAP.DEX (XETRA)',
+          ok: false,
+          detail: 'uebersprungen, ALPHA_VANTAGE_API_KEY nicht gesetzt',
+        }),
+    // Zwei Zukunftspfade, nur gemessen, noch nirgends verdrahtet:
+    // Tradegate koennte Live-Kurse deutscher Titel liefern (ohne
+    // Schluessel, per ISIN), filings.xbrl.org die amtlichen
+    // ESEF-Jahresabschluesse der EU-Konzerne. Ob beide von dieser
+    // Adresse aus antworten, entscheidet, ob sich der Ausbau lohnt.
+    pruefe('Tradegate', 'SAP (DE0007164600)', async () => {
+      const daten = await json('https://www.tradegate.de/refresh.php?isin=DE0007164600')
+      const last = (daten as { last?: unknown }).last
+      if (last === undefined) throw new Error('Antwort ohne Kursfeld')
+      return `letzter Preis ${String(last)}`
+    }),
+    pruefe('ESEF (filings.xbrl.org)', 'juengste DE-Einreichung', async () => {
+      const daten = await json(
+        'https://filings.xbrl.org/api/filings?filter=%5B%7B%22name%22%3A%22country%22%2C%22op%22%3A%22eq%22%2C%22val%22%3A%22DE%22%7D%5D&page%5Bsize%5D=1',
+      )
+      const anzahl = (daten as { meta?: { count?: number } }).meta?.count
+      return `erreichbar${typeof anzahl === 'number' ? `, ${anzahl} deutsche Einreichungen` : ''}`
+    }),
     finnhub.length > 0
       ? pruefe('Finnhub', 'Empfehlungen AAPL', async () => {
           const daten = await json(
