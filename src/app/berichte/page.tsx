@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import { DataBanner } from '@/components/DataBanner'
 import { Disclaimer } from '@/components/Disclaimer'
-import { loadTitles } from '@/data/titles'
+import { loadTitleData } from '@/data/load'
 import { GAP_LABEL, buildReportBriefs } from '@/domain/report-brief'
 import { formatCompact, formatDay, formatPercent } from '@/lib/format'
 
 export const dynamic = 'force-static'
 
-export default function BerichtePage() {
-  const data = loadTitles()
+export default async function BerichtePage() {
+  const data = await loadTitleData()
   const briefs = buildReportBriefs(data.titles)
   const withNumbers = briefs.filter((brief) => brief.gap === 'none').length
 

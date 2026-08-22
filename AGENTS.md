@@ -50,6 +50,16 @@ Ratings kommen als Momentaufnahme, nie als Strom. Der Strom entsteht durch
 - Anbieter werden in Tests durch die Attrappen aus `src/providers/fakes/`
   ersetzt. Tests rufen niemals echte Endpunkte auf.
 
+## Woher die Daten kommen
+
+Der Abruf laeuft in der Anwendung (`/api/refresh`), nicht in GitHub
+Actions. Actions macht Typpruefung und Tests. Wer einen Datenabruf
+hinzufuegt, haengt ihn in den Endpunkt, nicht in einen Workflow.
+
+Der Endpunkt arbeitet stapelweise und darf nie annehmen, dass er die
+ganze Watchlist in einem Aufruf schafft. Ein Fehler bei einem Titel hat
+die anderen nicht aufzuhalten; er wird protokolliert und angezeigt.
+
 ## Betrieb
 
 - Secrets nur in GitHub-Actions-Secrets und in Vercel, niemals im Repository.

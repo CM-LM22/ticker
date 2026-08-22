@@ -5,7 +5,7 @@ import { Disclaimer } from '@/components/Disclaimer'
 import { PriceChart } from '@/components/PriceChart'
 import { RangeBar } from '@/components/RangeBar'
 import { WATCHLIST } from '@/config/watchlist'
-import { loadTitles } from '@/data/titles'
+import { loadTitleData } from '@/data/load'
 import { RETURN_WINDOWS, window52Weeks } from '@/domain/price-series'
 import {
   formatCompact,
@@ -16,7 +16,7 @@ import {
   formatPrice,
 } from '@/lib/format'
 
-export const dynamic = 'force-static'
+export const revalidate = 300
 
 export function generateStaticParams() {
   return WATCHLIST.map((entry) => ({ ticker: entry.ticker.toLowerCase() }))
@@ -37,7 +37,7 @@ const PERIODICITY_LABEL = {
 
 export default async function TitlePage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params
-  const data = loadTitles()
+  const data = await loadTitleData()
   const title = data.titles.find(
     (candidate) => candidate.entry.ticker.toLowerCase() === ticker.toLowerCase(),
   )

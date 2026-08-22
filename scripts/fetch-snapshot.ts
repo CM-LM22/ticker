@@ -22,7 +22,7 @@ import {
   buildCikIndex,
   resolveCik,
   sleep,
-} from './lib/edgar'
+} from '../src/providers/edgar-index'
 
 /** Reicht fuer 52 Wochen Fenster plus 200-Tage-Schnitt und Vorjahresvergleich. */
 const HISTORY_DAYS = 420

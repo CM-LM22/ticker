@@ -14,7 +14,7 @@ import { applyIncomingActions, ratingsStateChanged } from '../src/data/ratings-p
 import { loadRatingsState } from '../src/data/ratings-state'
 import type { AnalystAction } from '../src/domain/analyst-actions'
 import { clipDigestBody, formatAnalystDigest } from '../src/domain/analyst-actions'
-import { sleep } from './lib/edgar'
+import { sleep } from '../src/providers/edgar-index'
 import { ProviderError } from '../src/providers/types'
 import { YahooRatingsProvider } from '../src/providers/yahoo-ratings'
 import { TelegramNotifier, readTelegramConfig } from '../src/providers/telegram'

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { loadTitles } from '@/data/titles'
+import { loadTitleData } from '@/data/load'
 import { buildReportBriefs } from '@/domain/report-brief'
 import { renderReportPdf } from '@/lib/report-pdf'
 
 export const dynamic = 'force-static'
 
-export function GET(): NextResponse {
-  const data = loadTitles()
+export async function GET(): Promise<NextResponse> {
+  const data = await loadTitleData()
   const bytes = renderReportPdf({
     briefs: buildReportBriefs(data.titles),
     asOf: data.asOf,

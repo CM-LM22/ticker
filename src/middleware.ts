@@ -17,6 +17,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse | R
   const { pathname, search } = request.nextUrl
   if (OFFEN.has(pathname)) return NextResponse.next()
 
+  // Vercel Cron ruft ohne Browser und damit ohne Cookie auf. Es weist
+  // sich stattdessen mit CRON_SECRET aus. Ist das Secret nicht gesetzt,
+  // gibt es diesen Weg nicht: dann bleibt der Endpunkt hinter dem
+  // Passwort, statt offen zu stehen.
+  const cronSecret = process.env['CRON_SECRET']?.trim()
+  if (
+    pathname === '/api/refresh' &&
+    cronSecret !== undefined &&
+    cronSecret.length > 0 &&
+    request.headers.get('authorization') === `Bearer ${cronSecret}`
+  ) {
+    return NextResponse.next()
+  }
+
   const password = process.env['APP_PASSWORD']?.trim()
 
   if (password === undefined || password.length === 0) {

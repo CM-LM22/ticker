@@ -1,16 +1,19 @@
 import Link from 'next/link'
 import { DataBanner } from '@/components/DataBanner'
 import { Disclaimer } from '@/components/Disclaimer'
+import { RefreshButton } from '@/components/RefreshButton'
 import { Sparkline } from '@/components/Sparkline'
-import { loadTitles } from '@/data/titles'
+import { loadTitleData } from '@/data/load'
 import { window52Weeks } from '@/domain/price-series'
 import { rank } from '@/domain/screening'
 import { formatDay, formatDaysUntil, formatPercent, formatPrice } from '@/lib/format'
 
-export const dynamic = 'force-static'
+// Wird alle fuenf Minuten neu erzeugt und zusaetzlich sofort nach
+// einem erfolgreichen Abruf, siehe /api/refresh.
+export const revalidate = 300
 
-export default function Home() {
-  const { titles, asOf, isDemo, priceSource, fundamentalsSource } = loadTitles()
+export default async function Home() {
+  const { titles, asOf, isDemo, priceSource, fundamentalsSource } = await loadTitleData()
 
   const order = new Map(
     rank(titles.map((title) => title.screen)).map((result, index) => [result.ticker, index]),
@@ -125,6 +128,8 @@ export default function Home() {
         60 · 100&nbsp;%. Die Punktzahl ist eine Rangfolge nach offengelegten Kriterien, keine
         Empfehlung; die Gewichte stehen auf jeder Detailseite.
       </p>
+
+      <RefreshButton />
 
       <form method="post" action="/api/logout" className="logout">
         <button type="submit">Abmelden</button>

@@ -401,3 +401,33 @@ table.brief {
     padding: 0.12rem 0.25rem;
   }
 }
+
+.refresh {
+  margin-top: 2.5rem;
+}
+
+.refresh button {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.refresh button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.refresh-notes {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.refresh-notes ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}

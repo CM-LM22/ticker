@@ -9,6 +9,9 @@ import { summarize52Weeks } from '../domain/price-series'
 import type { PriceSeries, PriceSummary } from '../domain/price-series'
 import { screen } from '../domain/screening'
 import type { ScreenResult } from '../domain/screening'
+import { hasDatabase } from '../db/client'
+import { lastRefreshAt, loadStoredTitles } from '../db/repository'
+import type { StoredTitle } from '../db/repository'
 import { loadSnapshot } from './snapshot'
 import type { SnapshotTitle } from './snapshot'
 
@@ -89,10 +92,47 @@ function build(
 }
 
 /**
- * Echte Daten, wenn ein Snapshot vorliegt, sonst Demodaten. Die
- * Oberflaeche fragt nur diese eine Stelle und muss den Unterschied
- * sonst nirgends kennen.
+ * Reihenfolge der Quellen: Datenbank, dann Snapshot-Datei, dann
+ * Demodaten. Die Oberflaeche fragt nur diese eine Stelle und muss den
+ * Unterschied sonst nirgends kennen.
+ *
+ * Faellt die Datenbank aus, zeigt die App den letzten Snapshot statt
+ * einer Fehlerseite. Eine veraltete Uebersicht ist brauchbarer als gar
+ * keine, solange der Stand darunter steht.
  */
+export async function loadTitlesFromDatabase(): Promise<TitleData | null> {
+  if (!hasDatabase()) return null
+  try {
+    const asOf = (await lastRefreshAt()) ?? new Date()
+    const sinceDay = new Date(asOf.getTime() - 420 * 86_400_000).toISOString().slice(0, 10)
+    const stored: Map<string, StoredTitle> = await loadStoredTitles(sinceDay)
+    if (stored.size === 0) return null
+
+    return {
+      titles: WATCHLIST.map((entry) => {
+        const found = stored.get(entry.ticker)
+        if (found === undefined || found.bars.length === 0) {
+          return build(entry, null, found?.periods ?? [], asOf, ['Noch nicht abgerufen.'])
+        }
+        const series: PriceSeries = {
+          ticker: entry.ticker,
+          currency: found.currency,
+          source: 'datenbank',
+          bars: found.bars,
+        }
+        return build(entry, series, found.periods, asOf, [])
+      }),
+      asOf,
+      isDemo: false,
+      priceSource: 'Twelve Data',
+      fundamentalsSource: 'SEC XBRL',
+    }
+  } catch (fehler) {
+    console.warn('Datenbank nicht lesbar, weiche auf den Snapshot aus:', fehler)
+    return null
+  }
+}
+
 export function loadTitles(): TitleData {
   const snapshot = loadSnapshot()
 

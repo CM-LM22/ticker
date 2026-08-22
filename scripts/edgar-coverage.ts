@@ -22,8 +22,8 @@ import {
   requireUserAgent,
   resolveCik,
   sleep,
-} from './lib/edgar'
-import type { CikIndex, Resolution } from './lib/edgar'
+} from '../src/providers/edgar-index'
+import type { CikIndex, Resolution } from '../src/providers/edgar-index'
 
 const WINDOW_MONTHS = 24
 /** Erlaubt sind 10 Anfragen pro Sekunde. Wir bleiben deutlich darunter. */

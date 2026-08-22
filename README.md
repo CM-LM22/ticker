@@ -25,6 +25,25 @@ eine A4-Seite) und **Analystenmeldungen**. Push fuer neue Rating-Aktionen
 laeuft ueber Telegram, sobald die Secrets gesetzt sind; der erste Abruf
 loest bewusst keine Alerts aus.
 
+## Daten holen
+
+Die Anwendung holt ihre Daten selbst. In der Uebersicht sitzt der Knopf
+**Daten aktualisieren**; er ruft `POST /api/refresh` stapelweise auf, bis
+die Watchlist durch ist. Zusaetzlich stoesst Vercel Cron den Endpunkt
+einmal taeglich an.
+
+Dafuer braucht es in Vercel unter *Settings, Environment Variables*:
+
+| Variable | wofuer |
+| --- | --- |
+| `DATABASE_URL` | Neon Postgres, der Speicher |
+| `TWELVEDATA_API_KEY` | Kurse |
+| `SEC_USER_AGENT` | Berichtszahlen, Form `projekt/0.1 (mail@example.com)` |
+| `CRON_SECRET` | nur damit Vercel Cron ohne Anmeldung durchkommt |
+
+Fehlt `DATABASE_URL`, antwortet der Endpunkt mit 503 und die Oberflaeche
+zeigt weiter den letzten Snapshot beziehungsweise Demodaten.
+
 ## Zugang
 
 Die Oberflaeche liegt hinter einem Passwort. Gesetzt wird es ueber

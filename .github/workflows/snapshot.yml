@@ -3,11 +3,12 @@ name: Echte Daten holen
 # Holt Kurse und Berichtszahlen und committet sie als data/snapshot.json.
 # Laeuft hier und nicht in der Anwendung, weil GitHub Actions Netzzugang
 # hat und der Stand so versioniert nachvollziehbar bleibt.
+# Der Zeitplan ist entfernt: Daten holt jetzt der Endpunkt /api/refresh
+# in der Anwendung, angestossen per Knopf oder von Vercel Cron. Dieser
+# Workflow bleibt nur als Notausgang, falls die Datenbank ausfaellt und
+# ein Snapshot als Rueckfallebene gebraucht wird.
 on:
   workflow_dispatch:
-  schedule:
-    # Werktags 06:10 UTC, nach dem US-Handelsschluss des Vortages.
-    - cron: '10 6 * * 1-5'
 
 permissions:
   contents: write

@@ -307,3 +307,49 @@ Die Lehre ist nicht neu, aber sie hat sich bezahlt gemacht: Der Parser
 hat die Bot-Seite abgefangen, statt sie als Kurse zu speichern. Der
 erste Datenlauf hat 40 leere Eintraege mit Begruendung erzeugt und
 keine einzige erfundene Zahl.
+
+## E21 Das Backend ist die Anwendung, nicht GitHub Actions
+
+**Korrigiert am 22.08.2026 auf Einwand hin, und der Einwand war richtig.**
+
+Daten in eine JSON-Datei zu holen und ins Repository zu committen war ein
+Notbehelf: Die Entwicklungsumgebung hatte keinen Netzzugang, Actions
+schon. Als Dauerloesung ist es falsch. Der Zustand lag in der
+Versionsverwaltung statt in einer Datenbank, jeder Lauf erzeugte einen
+Commit, und anstossen konnte ihn nur, wer Actions bedienen kann.
+
+Neu: `POST /api/refresh` in der Anwendung holt die Daten und schreibt
+sie nach Neon Postgres. Angestossen wird er per Knopf in der Oberflaeche
+oder taeglich von Vercel Cron. GitHub Actions macht wieder das, wofuer
+es da ist: Typpruefung und Tests.
+
+**Kein FastAPI, und zwar aus einem Grund, nicht aus Bequemlichkeit.**
+Die Domaenenlogik steht in TypeScript und ist getestet: Zod an jeder
+Datengrenze, 52-Wochen-Auswertung, Ratings-Diff, Terminschaetzung. Ein
+Python-Backend muesste das nachbauen oder als Weiterleiter danebenstehen
+— zwei Sprachen, zwei Abhaengigkeitsbaeume, zwei Deployments fuer
+dieselbe Arbeit. Next.js Route Handler laufen serverseitig; was fehlte,
+war kein Framework, sondern ein Endpunkt und ein Speicher.
+
+Entscheidungen im Detail:
+
+- **Stapelweise statt am Stueck.** Der Endpunkt verarbeitet fuenf Titel
+  je Aufruf und meldet, wo er stehengeblieben ist. Damit haengt er nicht
+  am Zeitlimit serverloser Funktionen, das je nach Tarif anders
+  ausfaellt. Die Oberflaeche ruft nach, bis `done` kommt.
+- **Fehler je Titel, nicht je Lauf.** Ein Titel ohne Kurse haelt die
+  anderen 39 nicht auf; der Grund landet in `refresh_run` und wird in
+  der Oberflaeche angezeigt.
+- **Rueckfallkette Datenbank, Snapshot, Demodaten.** Faellt die
+  Datenbank aus, zeigt die App den letzten Snapshot statt einer
+  Fehlerseite. Veraltet mit sichtbarem Stand schlaegt leer.
+- **Cron kommt ohne Cookie.** Vercel Cron weist sich mit `CRON_SECRET`
+  aus. Ist das Secret nicht gesetzt, gibt es diesen Weg nicht — der
+  Endpunkt bleibt dann hinter dem Passwort, statt offen zu stehen.
+- **Neon ueber HTTP.** Serverlose Funktionen leben eine Anfrage lang;
+  ein Verbindungspool waere dort sinnlos und wuerde die
+  Verbindungsgrenze sprengen.
+
+Der Snapshot-Workflow behaelt seinen Handstart als Notausgang, verliert
+aber seinen Zeitplan. Der Ratings-Poller laeuft vorerst weiter ueber
+Actions; er gehoert beim naechsten Schritt auf denselben Weg.

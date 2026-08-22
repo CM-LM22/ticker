@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { normalizeCik } from '../../src/domain/instrument'
-import type { WatchlistEntry } from '../../src/domain/instrument'
+import { normalizeCik } from '../domain/instrument'
+import type { WatchlistEntry } from '../domain/instrument'
 
 /**
  * CIK-Aufloesung, gemeinsam genutzt von allen Skripten. Frueher stand
