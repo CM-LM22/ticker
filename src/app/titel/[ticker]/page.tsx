@@ -60,6 +60,9 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
   const { ticker } = await params
   const [data, eigene] = await Promise.all([loadTitleData(), eigeneTicker()])
   const auszug = await ladeAuszug(ticker.toUpperCase())
+  const { cookies } = await import('next/headers')
+  const { alsSprache, SPRACHE_COOKIE, texte } = await import('@/lib/sprache')
+  const t = texte(alsSprache((await cookies()).get(SPRACHE_COOKIE)?.value))
   const title = data.titles.find(
     (candidate) => candidate.entry.ticker.toLowerCase() === ticker.toLowerCase(),
   )
@@ -71,14 +74,14 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
   return (
     <main>
       <p className="back">
-        <Link href="/">← Uebersicht</Link>
+        <Link href="/">{t.zurueck}</Link>
         {'  '}
         <a
           href={`/titel/${entry.ticker.toLowerCase()}/bericht.pdf`}
           target="_blank"
           rel="noopener"
         >
-          Ein-Seiten-Bericht (PDF)
+          {t.einSeiten}
         </a>
         {eigene.has(entry.ticker) && (
           <>

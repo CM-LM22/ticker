@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { DataBanner } from '@/components/DataBanner'
+import { KopfSchalter } from '@/components/KopfSchalter'
 import { Disclaimer } from '@/components/Disclaimer'
 import { OverviewTable } from '@/components/OverviewTable'
 import type { UebersichtZeile } from '@/components/OverviewTable'
@@ -9,6 +11,7 @@ import { window52Weeks } from '@/domain/price-series'
 import { rank } from '@/domain/screening'
 import { buildChart } from '@/lib/chart'
 import { formatDay } from '@/lib/format'
+import { alsSprache, SPRACHE_COOKIE, texte } from '@/lib/sprache'
 
 // Bei jedem Aufruf live aus der Datenbank gerendert. Vorgebackene
 // Staende gab es hier frueher (revalidate 300); sie haben nach jedem
@@ -69,22 +72,32 @@ export default async function Home() {
   const withFundamentals = titles.filter((title) => title.fundamentals !== null).length
   const withoutPrices = titles.filter((title) => title.price === null).length
 
+  const sprache = alsSprache((await cookies()).get(SPRACHE_COOKIE)?.value)
+  const t = texte(sprache)
+
   return (
     <main className="uebersicht">
       {/* Der feste Kopf bleibt bewusst schmal — Titel, Links, Suche —
           damit die Tabelle den Bildschirm bekommt. Alles Erklaerende
           lebt im Scrollbereich unter der Tabelle. */}
-      <h1>Ticker</h1>
+      <div className="kopf-zeile">
+        <h1>Ticker</h1>
+        <KopfSchalter sprache={sprache} />
+      </div>
 
       <p className="actions">
-        <Link href="/berichte">Geschäftsberichte als PDF</Link>
+        <Link href="/berichte">{t.berichteLink}</Link>
         {' · '}
-        <Link href="/analysten">Analysten</Link>
+        <Link href="/analysten">{t.analystenLink}</Link>
         {' · '}
-        <Link href="/diagnose">Diagnose</Link>
+        <Link href="/diagnose">{t.diagnoseLink}</Link>
       </p>
 
-      <OverviewTable rows={rows} asOfText={`Stand ${formatDay(asOf.toISOString().slice(0, 10))}`}>
+      <OverviewTable
+        rows={rows}
+        sprache={sprache}
+        asOfText={`${t.stand} ${formatDay(asOf.toISOString().slice(0, 10))}`}
+      >
         <DataBanner
           isDemo={isDemo}
           asOf={asOf}
@@ -107,10 +120,10 @@ export default async function Home() {
           Veraenderung seit dem Vortagesschluss, sobald Live-Kurse verfuegbar sind.
         </p>
 
-        <RefreshButton />
+        <RefreshButton sprache={sprache} />
 
         <form method="post" action="/api/logout" className="logout">
-          <button type="submit">Abmelden</button>
+          <button type="submit">{t.abmelden}</button>
         </form>
 
         <Disclaimer />

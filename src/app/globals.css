@@ -11,8 +11,11 @@
   --warn-line: #e8d59a;
 }
 
+/* Dunkle Farbwerte an zwei Stellen: einmal fuer Geraete im
+   Dunkelmodus (solange niemand ausdruecklich Hell gewaehlt hat),
+   einmal fuer die ausdrueckliche Wahl per Schalter. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #0f1115;
     --fg: #e8eaed;
     --muted: #9aa2ae;
@@ -23,6 +26,45 @@
     --warn-bg: #2a2313;
     --warn-line: #4d4222;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --fg: #e8eaed;
+  --muted: #9aa2ae;
+  --line: #262b33;
+  --accent: #6ea8fe;
+  --pos: #3fb27f;
+  --neg: #e5786d;
+  --warn-bg: #2a2313;
+  --warn-line: #4d4222;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+.kopf-schalter {
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.kopf-schalter button {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.kopf-zeile {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
 }
 
 * {

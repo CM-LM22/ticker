@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { texte } from '@/lib/sprache'
+import type { Sprache } from '@/lib/sprache'
 
 interface Antwort {
   ok: boolean
@@ -18,7 +20,8 @@ interface Antwort {
  * ist. Der Endpunkt arbeitet stapelweise, damit kein einzelner Aufruf
  * ins Zeitlimit der serverlosen Funktion laeuft.
  */
-export function RefreshButton() {
+export function RefreshButton({ sprache = 'de' }: { sprache?: Sprache }) {
+  const t = texte(sprache)
   const router = useRouter()
   const [laeuft, setLaeuft] = useState(false)
   const [fortschritt, setFortschritt] = useState<string | null>(null)
@@ -96,7 +99,7 @@ export function RefreshButton() {
   return (
     <div className="refresh">
       <button type="button" onClick={() => void aktualisieren()} disabled={laeuft}>
-        {laeuft ? 'Wird geholt …' : 'Daten aktualisieren'}
+        {laeuft ? t.wirdGeholt : t.aktualisieren}
       </button>
       {fortschritt !== null && <span className="muted"> {fortschritt}</span>}
       {fehler !== null && <p className="login-error">{fehler}</p>}

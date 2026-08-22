@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { formatDay, formatDaysUntil, formatNumber, formatPercent } from '@/lib/format'
+import { texte } from '@/lib/sprache'
+import type { Sprache } from '@/lib/sprache'
 
 export interface UebersichtZeile {
   ticker: string
@@ -34,11 +36,7 @@ interface QuotesAntwort {
   hinweis: string | null
 }
 
-const TABS = [
-  ['alle', 'Alle'],
-  ['NASDAQ', 'Nasdaq'],
-  ['XETRA', 'DAX'],
-] as const
+const TABS = ['alle', 'NASDAQ', 'XETRA'] as const
 
 interface SucheTreffer {
   ticker: string
@@ -65,15 +63,18 @@ interface SucheAntwort {
 export function OverviewTable({
   rows,
   asOfText,
+  sprache = 'de',
   children,
 }: {
   rows: UebersichtZeile[]
   asOfText: string
+  sprache?: Sprache
   children?: React.ReactNode
 }) {
+  const t = texte(sprache)
   const router = useRouter()
   const [filter, setFilter] = useState('')
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>('alle')
+  const [tab, setTab] = useState<(typeof TABS)[number]>('alle')
   const [quotes, setQuotes] = useState<Map<string, Quote>>(new Map())
   const [quoteStand, setQuoteStand] = useState<string | null>(null)
   const [quoteHinweis, setQuoteHinweis] = useState<string | null>(null)
@@ -215,13 +216,13 @@ export function OverviewTable({
       <div className="toolbar">
         <input
           type="search"
-          placeholder="Titel suchen …"
-          aria-label="Titel suchen"
+          placeholder={t.suchePlatzhalter}
+          aria-label={t.sucheLabel}
           value={filter}
           onChange={(ereignis) => setFilter(ereignis.target.value)}
         />
         <div className="tabs" role="tablist">
-          {TABS.map(([wert, beschriftung]) => (
+          {TABS.map((wert) => (
             <button
               key={wert}
               type="button"
@@ -230,14 +231,14 @@ export function OverviewTable({
               className={tab === wert ? 'tab aktiv' : 'tab'}
               onClick={() => setTab(wert)}
             >
-              {beschriftung}
+              {wert === 'alle' ? t.tabAlle : wert === 'NASDAQ' ? t.tabNasdaq : t.tabDax}
             </button>
           ))}
         </div>
         <span className="muted quote-stand">
           {quoteStand !== null ? (
             <>
-              <span className="live-dot" aria-hidden="true" /> Kurse {quoteStand} Uhr
+              <span className="live-dot" aria-hidden="true" /> {t.kurseUm} {quoteStand} {t.uhr}
             </>
           ) : (
             asOfText
@@ -250,14 +251,14 @@ export function OverviewTable({
       <table className="overview">
         <thead>
           <tr>
-            <th>Titel</th>
-            <th className="num">Kurs</th>
-            <th className="num">heute</th>
-            <th>52 Wochen</th>
-            <th className="num">12 Mon.</th>
-            <th className="num">im Band</th>
-            <th>naechste Zahlen</th>
-            <th className="num">Punkte</th>
+            <th>{t.spalteTitel}</th>
+            <th className="num">{t.spalteKurs}</th>
+            <th className="num">{t.spalteHeute}</th>
+            <th>{t.spalte52w}</th>
+            <th className="num">{t.spalte12m}</th>
+            <th className="num">{t.spalteBand}</th>
+            <th>{t.spalteZahlen}</th>
+            <th className="num">{t.spaltePunkte}</th>
           </tr>
         </thead>
         <tbody>
@@ -306,7 +307,7 @@ export function OverviewTable({
                 <td className="num">{zeile.band === null ? '—' : `${zeile.band.toFixed(0)} %`}</td>
                 <td>
                   {zeile.terminTag === null ? (
-                    <span className="muted">nicht schaetzbar</span>
+                    <span className="muted">{t.nichtSchaetzbar}</span>
                   ) : (
                     <>
                       {formatDay(zeile.terminTag)}
@@ -334,22 +335,21 @@ export function OverviewTable({
       </table>
 
       {sichtbar.length === 0 && (
-        <p className="muted">Kein Titel passt zu dieser Suche.</p>
+        <p className="muted">{t.keinTreffer}</p>
       )}
 
       {addStatus !== null && <p className="footnote">{addStatus}</p>}
 
       {filter.trim().length >= 2 && (
         <section className="add-panel">
-          <h2>Neu hinzufuegen</h2>
+          <h2>{t.neuHinzufuegen}</h2>
           <p className="muted footnote">
-            US-Titel aus dem offiziellen SEC-Verzeichnis (Nasdaq und NYSE), deutsche Titel ueber
-            die XETRA-Suche darunter. Nach dem Hinzufuegen werden die Daten sofort geholt.
+            {t.neuErklaerung}
           </p>
           {sucheHinweis !== null && <p className="muted footnote">{sucheHinweis}</p>}
           {sucheTreffer.filter((treffer) => !treffer.imBestand).length === 0 &&
             sucheHinweis === null && (
-              <p className="muted footnote">Kein weiterer Treffer im SEC-Verzeichnis.</p>
+              <p className="muted footnote">{t.keinSecTreffer}</p>
             )}
           <ul className="add-list">
             {sucheTreffer
@@ -364,7 +364,7 @@ export function OverviewTable({
                       disabled={addLaeuft}
                       onClick={() => void hinzufuegen(treffer.ticker)}
                     >
-                      Hinzufuegen
+                      {t.hinzufuegen}
                     </button>
                   ) : (
                     <span className="muted">{treffer.grund}</span>
@@ -377,17 +377,17 @@ export function OverviewTable({
             {xetraTreffer === null ? (
               <p className="footnote">
                 <button type="button" disabled={xetraLaeuft} onClick={() => void xetraSuchen()}>
-                  {xetraLaeuft ? 'Sucht …' : 'Auch deutsche Titel (XETRA) suchen'}
+                  {xetraLaeuft ? t.xetraSucht : t.xetraSuchen}
                 </button>{' '}
                 <span className="muted">
-                  Verbraucht einen von 25 Alpha-Vantage-Tagesabrufen, deshalb erst auf Klick.
+                  {t.xetraKosten}
                 </span>
               </p>
             ) : (
               <>
                 {xetraTreffer.filter((treffer) => !treffer.imBestand).length === 0 &&
                   xetraHinweis === null && (
-                    <p className="muted footnote">Kein XETRA-Treffer fuer diese Suche.</p>
+                    <p className="muted footnote">{t.keinXetraTreffer}</p>
                   )}
                 <ul className="add-list">
                   {xetraTreffer
@@ -401,7 +401,7 @@ export function OverviewTable({
                           disabled={addLaeuft}
                           onClick={() => void hinzufuegen(treffer.ticker, 'xetra')}
                         >
-                          Hinzufuegen
+                          {t.hinzufuegen}
                         </button>
                       </li>
                     ))}
