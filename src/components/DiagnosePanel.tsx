@@ -9,6 +9,14 @@ interface Probe {
   detail: string
 }
 
+interface Konfig {
+  name: string
+  gesetzt: boolean
+  pflicht: boolean
+  wofuer: string
+  hinweis: string | null
+}
+
 interface Zeile {
   ticker: string
   name: string
@@ -29,6 +37,7 @@ interface Zeile {
  * stapelweise, damit kein Aufruf ins Zeitlimit laeuft.
  */
 export function DiagnosePanel() {
+  const [konfig, setKonfig] = useState<Konfig[] | null>(null)
   const [proben, setProben] = useState<Probe[] | null>(null)
   const [zeilen, setZeilen] = useState<Zeile[] | null>(null)
   const [laeuft, setLaeuft] = useState<string | null>(null)
@@ -39,10 +48,17 @@ export function DiagnosePanel() {
     setFehler(null)
     try {
       const antwort = await fetch('/api/diagnose?teil=quellen', { method: 'POST' }).then(
-        (r) => r.json() as Promise<{ ok: boolean; proben?: Probe[]; fehler?: string }>,
+        (r) =>
+          r.json() as Promise<{
+            ok: boolean
+            konfiguration?: Konfig[]
+            proben?: Probe[]
+            fehler?: string
+          }>,
       )
-      if (!antwort.ok) setFehler(antwort.fehler ?? 'Unbekannter Fehler')
-      else setProben(antwort.proben ?? [])
+      setKonfig(antwort.konfiguration ?? null)
+      setProben(antwort.proben ?? [])
+      if (antwort.fehler !== undefined) setFehler(antwort.fehler)
     } catch (ursache) {
       setFehler(ursache instanceof Error ? ursache.message : String(ursache))
     } finally {
@@ -99,7 +115,52 @@ export function DiagnosePanel() {
         {fehler !== null && <p className="login-error">{fehler}</p>}
       </div>
 
-      {proben !== null && (
+      {konfig !== null && (
+        <>
+          <h2>
+            Umgebungsvariablen{' '}
+            <span className="muted">
+              {konfig.filter((k) => k.gesetzt).length} von {konfig.length} gesetzt
+            </span>
+          </h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Status</th>
+                <th>wofür</th>
+              </tr>
+            </thead>
+            <tbody>
+              {konfig.map((eintrag) => (
+                <tr key={eintrag.name}>
+                  <td>
+                    <strong>{eintrag.name}</strong>
+                    {eintrag.pflicht ? '' : <span className="muted"> (optional)</span>}
+                  </td>
+                  <td className={eintrag.gesetzt ? 'up' : eintrag.pflicht ? 'down' : 'muted'}>
+                    {eintrag.gesetzt ? '✓ gesetzt' : eintrag.pflicht ? '✗ fehlt' : '– nicht gesetzt'}
+                  </td>
+                  <td className="muted">
+                    {eintrag.wofuer}
+                    {eintrag.hinweis !== null && (
+                      <>
+                        {' '}
+                        <span className="down">{eintrag.hinweis}</span>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="muted footnote">
+            Angezeigt wird nur, ob eine Variable gesetzt ist — nie ihr Wert, auch nicht gekürzt.
+          </p>
+        </>
+      )}
+
+      {proben !== null && proben.length > 0 && (
         <>
           <h2>Erreichbarkeit der Quellen</h2>
           <table>

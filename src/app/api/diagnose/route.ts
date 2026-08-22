@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { WATCHLIST } from '@/config/watchlist'
 import { loadCikIndex, measureCoverage } from '@/diagnostics/coverage'
 import type { CoverageRow } from '@/diagnostics/coverage'
+import { checkConfiguration } from '@/diagnostics/config'
 import { probeSources } from '@/diagnostics/sources'
 
 /**
@@ -27,10 +28,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const teil = params.get('teil') ?? 'quellen'
 
   if (teil === 'quellen') {
+    // Die Konfigurationspruefung zuerst und ohne Netz: sie beantwortet
+    // "habe ich alles eingetragen" auch dann, wenn keine Quelle
+    // antwortet, und liefert nur wahr oder falsch, nie einen Wert.
+    const konfiguration = checkConfiguration()
     try {
-      return NextResponse.json({ ok: true, teil, proben: await probeSources() })
+      return NextResponse.json({ ok: true, teil, konfiguration, proben: await probeSources() })
     } catch (fehler) {
-      return NextResponse.json({ ok: false, fehler: message(fehler) }, { status: 500 })
+      return NextResponse.json(
+        { ok: true, teil, konfiguration, proben: [], fehler: message(fehler) },
+        { status: 200 },
+      )
     }
   }
 
