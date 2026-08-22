@@ -55,7 +55,10 @@ const RAW_ENTRIES: readonly WatchlistEntry[] = [
   { ticker: 'BMW', name: 'Bayerische Motoren Werke AG', venue: 'XETRA', isin: 'DE0005190003', expectedCoverage: 'none' },
   { ticker: 'BAS', name: 'BASF SE', venue: 'XETRA', isin: 'DE000BASF111', expectedCoverage: 'none' },
   { ticker: 'BAYN', name: 'Bayer AG', venue: 'XETRA', isin: 'DE000BAY0017', expectedCoverage: 'none' },
-  { ticker: 'IFX', name: 'Infineon Technologies AG', venue: 'XETRA', isin: 'DE0006231004', expectedCoverage: 'none' },
+  // IFNNY ist das dokumentierte US-OTC-Kuerzel des Infineon-ADR. Es
+  // dient nur als Kurs-Rueckfall: Alpha Vantage kennt IFX.DEX nicht
+  // ("keine Kursreihe", Lauf vom 22.08.2026), Twelve Data kein XETRA.
+  { ticker: 'IFX', name: 'Infineon Technologies AG', venue: 'XETRA', isin: 'DE0006231004', expectedCoverage: 'none', secTickerHint: 'IFNNY' },
   { ticker: 'DHL', name: 'DHL Group', venue: 'XETRA', isin: 'DE0005552004', expectedCoverage: 'none' },
   { ticker: 'RWE', name: 'RWE AG', venue: 'XETRA', isin: 'DE0007037129', expectedCoverage: 'none' },
   { ticker: 'ADS', name: 'adidas AG', venue: 'XETRA', isin: 'DE000A1EWWW0', expectedCoverage: 'none' },
