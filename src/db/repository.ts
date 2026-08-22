@@ -530,3 +530,65 @@ export async function removeCustomTitle(ticker: string): Promise<boolean> {
   `) as { ticker: string }[]
   return rows.length > 0
 }
+
+export interface BerichtAuszug {
+  ticker: string
+  periodEnd: string
+  auszug: string
+  dokumentUrl: string
+  fetchedAt: Date
+}
+
+/** Der gespeicherte MD&A-Auszug eines Titels, falls vorhanden. */
+export async function readBerichtAuszug(ticker: string): Promise<BerichtAuszug | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT ticker, period_end::text AS period_end, auszug, dokument_url, fetched_at
+    FROM bericht_auszug
+    WHERE ticker = ${ticker}
+  `) as Record<string, unknown>[]
+  const row = rows[0]
+  if (row === undefined) return null
+  return {
+    ticker: String(row['ticker']),
+    periodEnd: String(row['period_end']).slice(0, 10),
+    auszug: String(row['auszug']),
+    dokumentUrl: String(row['dokument_url']),
+    fetchedAt: row['fetched_at'] instanceof Date ? row['fetched_at'] : new Date(String(row['fetched_at'])),
+  }
+}
+
+export async function saveBerichtAuszug(eintrag: {
+  ticker: string
+  periodEnd: string
+  auszug: string
+  dokumentUrl: string
+}): Promise<void> {
+  const sql = getSql()
+  await sql`
+    INSERT INTO bericht_auszug (ticker, period_end, auszug, dokument_url, fetched_at)
+    VALUES (${eintrag.ticker}, ${eintrag.periodEnd}, ${eintrag.auszug}, ${eintrag.dokumentUrl}, now())
+    ON CONFLICT (ticker) DO UPDATE SET
+      period_end = EXCLUDED.period_end,
+      auszug = EXCLUDED.auszug,
+      dokument_url = EXCLUDED.dokument_url,
+      fetched_at = EXCLUDED.fetched_at
+  `
+}
+
+/** Juengste berichtete Periode mit Quell-URL, fuer den MD&A-Auszug. */
+export async function latestPeriodSource(
+  ticker: string,
+): Promise<{ periodEnd: string; sourceUrl: string } | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT period_end::text AS period_end, source_url
+    FROM reported_period
+    WHERE ticker = ${ticker} AND source_url IS NOT NULL
+    ORDER BY period_end DESC, frame
+    LIMIT 1
+  `) as { period_end: string; source_url: string }[]
+  const row = rows[0]
+  if (row === undefined) return null
+  return { periodEnd: row.period_end.slice(0, 10), sourceUrl: row.source_url }
+}

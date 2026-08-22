@@ -121,6 +121,20 @@ export async function ensureSchema(): Promise<void> {
       ADD CONSTRAINT custom_titel_venue_ok CHECK (venue IN ('NASDAQ', 'NYSE', 'XETRA'))
   `
 
+  // Woertlicher MD&A-Auszug des juengsten Berichts je Titel. Nur der
+  // aktuelle Stand wird gehalten (Schluessel: ticker); period_end
+  // sagt, zu welcher Einreichung er gehoert, damit ein neuer Bericht
+  // den Auszug ueberschreibt.
+  await sql`
+    CREATE TABLE IF NOT EXISTS bericht_auszug (
+      ticker       text PRIMARY KEY,
+      period_end   date NOT NULL,
+      auszug       text NOT NULL,
+      dokument_url text NOT NULL,
+      fetched_at   timestamptz NOT NULL DEFAULT now()
+    )
+  `
+
   // Analystenkonsens als Monatsstand je Titel. Die Veraenderung
   // zwischen zwei Staenden wird als Meldung in analyst_action gelegt;
   // diese Tabelle haelt nur den Verlauf fuer die Anzeige.

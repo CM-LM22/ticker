@@ -1,13 +1,30 @@
 import { NextResponse } from 'next/server'
 import { loadTitleData } from '@/data/load'
 import { hasDatabase, istTabelleFehlt } from '@/db/client'
-import { loadTrendOverview } from '@/db/repository'
+import { loadTrendOverview, readBerichtAuszug } from '@/db/repository'
 import type { TrendPair } from '@/db/repository'
 import { window52Weeks } from '@/domain/price-series'
 import { buildStockBrief } from '@/domain/stock-brief'
 import { renderStockPdf } from '@/lib/stock-pdf'
 
 export const dynamic = 'force-dynamic'
+
+/** MD&A-Auszug des Titels, tolerant gegen fehlende Tabellen. */
+async function ladeAuszug(
+  ticker: string,
+): Promise<{ text: string; dokumentUrl: string; periodEnd: string } | null> {
+  if (!hasDatabase()) return null
+  try {
+    const auszug = await readBerichtAuszug(ticker)
+    if (auszug === null) return null
+    return { text: auszug.auszug, dokumentUrl: auszug.dokumentUrl, periodEnd: auszug.periodEnd }
+  } catch (fehler) {
+    if (!istTabelleFehlt(fehler)) {
+      console.warn(`bericht.pdf ${ticker}: Auszug nicht lesbar:`, fehler)
+    }
+    return null
+  }
+}
 
 /** Konsenspaar des Titels, tolerant gegen fehlende Tabellen. */
 async function ladeKonsens(ticker: string): Promise<TrendPair | null> {
@@ -34,7 +51,10 @@ export async function GET(
     return NextResponse.json({ fehler: `Unbekannter Titel: ${ticker}` }, { status: 404 })
   }
 
-  const konsens = await ladeKonsens(title.entry.ticker)
+  const [konsens, auszug] = await Promise.all([
+    ladeKonsens(title.entry.ticker),
+    ladeAuszug(title.entry.ticker),
+  ])
   const brief = buildStockBrief({
     entry: title.entry,
     price: title.price,
@@ -45,7 +65,7 @@ export async function GET(
     konsensVormonat: konsens?.vormonat ?? null,
   })
   const bars = title.series === null ? [] : window52Weeks(title.series, data.asOf)
-  const bytes = renderStockPdf({ brief, bars, asOf: data.asOf, isDemo: data.isDemo })
+  const bytes = renderStockPdf({ brief, bars, asOf: data.asOf, isDemo: data.isDemo, auszug })
 
   return new NextResponse(Buffer.from(bytes), {
     headers: {

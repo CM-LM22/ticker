@@ -2,7 +2,7 @@ import type { PriceBar } from '../domain/price-series'
 import type { StockBrief } from '../domain/stock-brief'
 import { formatCompact, formatDay, formatPercent, formatPrice } from './format'
 import { A4_PORTRAIT, helveticaWidth, renderSinglePagePdf, truncateToWidth } from './pdf'
-import type { PdfStroke, PdfText } from './pdf'
+import type { PdfRect, PdfStroke, PdfText } from './pdf'
 
 /**
  * Der Ein-Seiten-Bericht je Titel als PDF: Kopf mit Kurs, 52-Wochen-
@@ -17,6 +17,31 @@ export interface StockPdfInput {
   bars: readonly PriceBar[]
   asOf: Date
   isDemo: boolean
+  /** Woertlicher MD&A-Auszug aus dem juengsten Bericht, falls geholt. */
+  auszug: { text: string; dokumentUrl: string; periodEnd: string } | null
+}
+
+/** Zeilenumbruch nach gemessener Breite, fuer den Zitatblock. */
+export function zeilenUmbruch(text: string, size: number, maxWidth: number): string[] {
+  const zeilen: string[] = []
+  for (const absatz of text.split('\n')) {
+    if (absatz.trim().length === 0) {
+      zeilen.push('')
+      continue
+    }
+    let aktuelle = ''
+    for (const wort of absatz.split(/\s+/)) {
+      const kandidat = aktuelle.length === 0 ? wort : `${aktuelle} ${wort}`
+      if (helveticaWidth(kandidat, size) <= maxWidth) {
+        aktuelle = kandidat
+      } else {
+        if (aktuelle.length > 0) zeilen.push(aktuelle)
+        aktuelle = helveticaWidth(wort, size) <= maxWidth ? wort : truncateToWidth(wort, size, maxWidth)
+      }
+    }
+    if (aktuelle.length > 0) zeilen.push(aktuelle)
+  }
+  return zeilen
 }
 
 const LINKS = 40
@@ -76,10 +101,64 @@ export function preisPfad(
   return strokes
 }
 
+/**
+ * Umsatz- und Ergebnisbalken je Quartal, chronologisch. Negative Werte
+ * haengen unter der Nulllinie; der Massstab kommt aus dem Betragsmax.
+ */
+export function quartalsBalken(
+  quartale: readonly { label: string; revenue: number | null; netIncome: number | null }[],
+  rahmen: { x: number; y: number; width: number; height: number },
+): { rects: PdfRect[]; texts: PdfText[]; strokes: PdfStroke[] } {
+  const rects: PdfRect[] = []
+  const texts: PdfText[] = []
+  const strokes: PdfStroke[] = []
+  const chronologisch = [...quartale].reverse()
+  const werte = chronologisch.flatMap((zeile) => [zeile.revenue ?? 0, zeile.netIncome ?? 0])
+  const min = Math.min(0, ...werte)
+  const max = Math.max(0, ...werte)
+  if (max === min) return { rects, texts, strokes }
+
+  const skala = rahmen.height / (max - min)
+  const nullY = rahmen.y + (0 - min) * skala
+  const gruppe = rahmen.width / chronologisch.length
+  const balken = Math.min(26, gruppe * 0.32)
+
+  strokes.push({ x1: rahmen.x, y1: nullY, x2: rahmen.x + rahmen.width, y2: nullY })
+
+  chronologisch.forEach((zeile, index) => {
+    const mitte = rahmen.x + gruppe * index + gruppe / 2
+    const paare: { wert: number | null; grau: number; dx: number }[] = [
+      { wert: zeile.revenue, grau: 0.78, dx: -balken - 1 },
+      { wert: zeile.netIncome, grau: 0.35, dx: 1 },
+    ]
+    for (const { wert, grau, dx } of paare) {
+      if (wert === null) continue
+      const hoehe = wert * skala
+      rects.push({
+        x: mitte + dx,
+        y: hoehe >= 0 ? nullY : nullY + hoehe,
+        width: balken,
+        height: Math.abs(hoehe),
+        grau,
+      })
+    }
+    const label = truncateToWidth(zeile.label, 6.5, gruppe - 4)
+    texts.push({
+      x: mitte - helveticaWidth(label, 6.5) / 2,
+      y: rahmen.y - 9,
+      size: 6.5,
+      font: 'regular',
+      text: label,
+    })
+  })
+  return { rects, texts, strokes }
+}
+
 export function renderStockPdf(input: StockPdfInput): Uint8Array {
   const { brief } = input
   const texts: PdfText[] = []
   const strokes: PdfStroke[] = []
+  const rects: PdfRect[] = []
   let y = 800
 
   // Kopf: Ticker, Name, Handelsplatz, Stand.
@@ -213,6 +292,21 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
   }
   y -= 8
 
+  // Umsatz und Ergebnis je Quartal als Balken, wenn Zahlen da sind.
+  if (brief.quartale.some((zeile) => zeile.revenue !== null || zeile.netIncome !== null)) {
+    const chart = { x: LINKS + 30, y: y - 74, width: 320, height: 60 }
+    const gezeichnet = quartalsBalken(brief.quartale, chart)
+    rects.push(...gezeichnet.rects)
+    strokes.push(...gezeichnet.strokes)
+    texts.push(...gezeichnet.texts)
+    // Legende rechts neben der Grafik.
+    rects.push({ x: 380, y: y - 26, width: 8, height: 8, grau: 0.78 })
+    texts.push({ x: 392, y: y - 25, size: 7, font: 'regular', text: 'Umsatz' })
+    rects.push({ x: 380, y: y - 40, width: 8, height: 8, grau: 0.35 })
+    texts.push({ x: 392, y: y - 39, size: 7, font: 'regular', text: 'Ergebnis' })
+    y = chart.y - 22
+  }
+
   // Analystenkonsens.
   texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Analystenkonsens' })
   y -= 13
@@ -295,6 +389,36 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
   }
   y -= 6
 
+  // Woertliches Zitat aus dem Lagebericht — die Geschichte hinter den
+  // Zahlen, wie das Management sie selbst erzaehlt. Keine
+  // Zusammenfassung, kein erzeugter Text; gekuerzt und verlinkt.
+  if (input.auszug !== null && y > 120) {
+    texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Aus dem Bericht — woertlich (MD&A)' })
+    y -= 12
+    const zeilen = zeilenUmbruch(input.auszug.text, 7.5, RECHTS - LINKS)
+    for (const zeile of zeilen) {
+      if (y < 78) {
+        texts.push({ x: LINKS, y, size: 7.5, font: 'regular', text: '… (gekuerzt, weiter im Original)' })
+        y -= 10
+        break
+      }
+      texts.push({ x: LINKS, y, size: 7.5, font: 'regular', text: zeile })
+      y -= zeile.length === 0 ? 5 : 9.5
+    }
+    texts.push({
+      x: LINKS,
+      y,
+      size: 6.5,
+      font: 'regular',
+      text: truncateToWidth(
+        `Woertlicher Auszug aus dem Originaldokument (${input.auszug.dokumentUrl}), automatisch ausgeschnitten.`,
+        6.5,
+        RECHTS - LINKS,
+      ),
+    })
+    y -= 14
+  }
+
   // Bekannte Luecken, damit die Seite nicht mehr verspricht, als da ist.
   if (brief.luecken.length > 0) {
     texts.push({ x: LINKS, y, size: 8, font: 'bold', text: 'Bekannte Luecken' })
@@ -313,5 +437,6 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
     height: A4_PORTRAIT.height,
     texts,
     strokes,
+    rects,
   })
 }

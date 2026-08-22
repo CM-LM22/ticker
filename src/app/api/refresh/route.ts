@@ -9,6 +9,9 @@ import {
   lastFundamentalsSuccess,
   latestBarDay,
   latestClose,
+  latestPeriodSource,
+  readBerichtAuszug,
+  saveBerichtAuszug,
   loadUnnotifiedActions,
   markNotified,
   readLatestTrend,
@@ -32,6 +35,7 @@ import {
   parseRecommendationTrends,
   recommendationUrl,
 } from '@/providers/finnhub'
+import { holeMdnaAuszug } from '@/providers/sec-mdna'
 import { CompanyFactsSchema, companyFactsUrl, extractPeriods } from '@/providers/sec-xbrl'
 import {
   fetchTradegateQuote,
@@ -291,6 +295,39 @@ async function holeBerichtszahlen(
 }
 
 /**
+ * Woertlicher MD&A-Auszug zum juengsten Bericht. Geholt wird nur, wenn
+ * der gespeicherte Auszug fehlt oder zu einer aelteren Periode gehoert
+ * — also praktisch nur nach einer neuen Einreichung. Findet sich kein
+ * MD&A-Abschnitt (bei 6-K und 20-F normal), kostet der erneute Versuch
+ * je Lauf einen Abruf; das ist billiger als ein Leereintrag, der einen
+ * spaeteren Treffer fuer immer verhindern wuerde.
+ */
+async function holeAuszug(entry: WatchlistEntry, uebersprungen: string[]): Promise<void> {
+  const userAgent = process.env['SEC_USER_AGENT']?.trim() ?? ''
+  if (!userAgent.includes('@')) return
+
+  const quelle = await latestPeriodSource(entry.ticker)
+  if (quelle === null) return
+  const vorhanden = await readBerichtAuszug(entry.ticker)
+  if (vorhanden !== null && vorhanden.periodEnd >= quelle.periodEnd) {
+    uebersprungen.push('Auszug aktuell')
+    return
+  }
+
+  const ergebnis = await holeMdnaAuszug(quelle.sourceUrl, userAgent)
+  if (ergebnis === null) {
+    uebersprungen.push('Auszug: kein MD&A-Abschnitt gefunden')
+    return
+  }
+  await saveBerichtAuszug({
+    ticker: entry.ticker,
+    periodEnd: quelle.periodEnd,
+    auszug: ergebnis.auszug,
+    dokumentUrl: ergebnis.dokumentUrl,
+  })
+}
+
+/**
  * Analystenkonsens von Finnhub. Der Vergleich mit dem letzten Stand
  * ergibt die Meldung; gespeichert wird beides. Ohne Schluessel wird
  * still uebersprungen, das ist ein bekannter Zustand und kein Fehler.
@@ -360,6 +397,13 @@ async function verarbeite(
       periods = await holeBerichtszahlen(entry, uebersprungen)
     } catch (error) {
       notizen.push(`Berichtszahlen: ${message(error)}`)
+    }
+    try {
+      await holeAuszug(entry, uebersprungen)
+    } catch (error) {
+      // Ein fehlender Auszug macht den Lauf nicht kaputt; er fehlt
+      // dann eben und der Grund steht am Titel.
+      notizen.push(`Auszug: ${message(error)}`)
     }
   }
 

@@ -30,6 +30,19 @@ export function generateStaticParams() {
   return WATCHLIST.map((entry) => ({ ticker: entry.ticker.toLowerCase() }))
 }
 
+/** MD&A-Auszug lesen, tolerant gegen fehlende Datenbank und Tabellen. */
+async function ladeAuszug(ticker: string) {
+  const { hasDatabase, istTabelleFehlt } = await import('@/db/client')
+  if (!hasDatabase()) return null
+  try {
+    const { readBerichtAuszug } = await import('@/db/repository')
+    return await readBerichtAuszug(ticker)
+  } catch (fehler) {
+    if (!istTabelleFehlt(fehler)) console.warn(`titel ${ticker}: Auszug nicht lesbar:`, fehler)
+    return null
+  }
+}
+
 const CONFIDENCE_LABEL = {
   hoch: 'hohe Treffsicherheit',
   mittel: 'mittlere Treffsicherheit',
@@ -46,6 +59,7 @@ const PERIODICITY_LABEL = {
 export default async function TitlePage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params
   const [data, eigene] = await Promise.all([loadTitleData(), eigeneTicker()])
+  const auszug = await ladeAuszug(ticker.toUpperCase())
   const title = data.titles.find(
     (candidate) => candidate.entry.ticker.toLowerCase() === ticker.toLowerCase(),
   )
@@ -273,6 +287,22 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
               ))}
             </ul>
           )}
+        </>
+      )}
+
+      {auszug !== null && (
+        <>
+          <h2>Aus dem Bericht — woertlich</h2>
+          <p className="muted footnote">
+            Anfang des Lageberichts (MD&amp;A) zur Periode bis {formatDay(auszug.periodEnd)},
+            woertlich aus dem Originaldokument ausgeschnitten — keine Zusammenfassung, kein
+            erzeugter Text. <a href={auszug.dokumentUrl}>Zum Originaldokument</a>.
+          </p>
+          {auszug.auszug.split('\n\n').map((absatz) => (
+            <p key={absatz.slice(0, 40)} className="auszug">
+              {absatz}
+            </p>
+          ))}
         </>
       )}
 

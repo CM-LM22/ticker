@@ -622,3 +622,21 @@ einem boersenfreien Montag wird dienstagfrueh der Freitagskurs als
 Montagsschluss gespeichert — eine flache Kerze, kosmetisch falsch,
 rechnerisch harmlos (Rendite null). Ein Feiertagskalender waere
 laufender Pflegeaufwand fuer neun Tage im Jahr.
+
+## E31 Die Geschichte zum Bericht: woertliches MD&A-Zitat, keine erzeugte Prosa
+
+Der Ein-Seiten-Bericht bekommt das Narrativ dazu — aber als
+woertliches Zitat, nicht als erzeugte Zusammenfassung: Beim
+Datenabruf wird zum juengsten 10-K/10-Q das Hauptdokument aus dem
+EDGAR-Ordner geholt und der Anfang des Abschnitts "Management's
+Discussion and Analysis" woertlich ausgeschnitten (Tabelle
+bericht_auszug, ein Auszug je Titel). Ein heuristisch gekuerztes
+Zitat kann schief abschneiden, aber nie etwas behaupten, was nicht im
+Bericht steht — die Fortsetzung des Grundsatzes aus E28. Geholt wird
+nur nach einer neuen Einreichung; 6-K und 20-F ohne solchen Abschnitt
+sind ein protokollierter Befund, kein Fehler.
+
+Dazu zeichnet das PDF Umsatz und Ergebnis je Quartal als Balken
+(gefuellte Rechtecke im eigenen PDF-Schreiber, Graustufen), und die
+Detailseite zeigt denselben Auszug als Zitatblock mit Link auf das
+Originaldokument.

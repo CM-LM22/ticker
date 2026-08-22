@@ -23,6 +23,15 @@ export interface PdfStroke {
   y2: number
 }
 
+/** Gefuelltes Rechteck; grau ist 0 (schwarz) bis 1 (weiss). */
+export interface PdfRect {
+  x: number
+  y: number
+  width: number
+  height: number
+  grau: number
+}
+
 const UNICODE_TO_WINANSI: ReadonlyMap<number, number> = new Map([
   [0x20ac, 0x80],
   [0x201a, 0x82],
@@ -113,8 +122,19 @@ function pdfEscape(text: string): string {
   return out
 }
 
-function contentStream(texts: readonly PdfText[], strokes: readonly PdfStroke[]): string {
+function contentStream(
+  texts: readonly PdfText[],
+  strokes: readonly PdfStroke[],
+  rects: readonly PdfRect[],
+): string {
   const chunks: string[] = []
+  for (const rect of rects) {
+    chunks.push(`${Math.min(1, Math.max(0, rect.grau)).toFixed(3)} g`)
+    chunks.push(
+      `${rect.x.toFixed(2)} ${rect.y.toFixed(2)} ${rect.width.toFixed(2)} ${rect.height.toFixed(2)} re f`,
+    )
+  }
+  if (rects.length > 0) chunks.push('0 g')
   for (const stroke of strokes) {
     chunks.push('0.4 w')
     chunks.push(`${stroke.x1.toFixed(2)} ${stroke.y1.toFixed(2)} m`)
@@ -172,8 +192,9 @@ export function renderSinglePagePdf(options: {
   height: number
   texts: readonly PdfText[]
   strokes?: readonly PdfStroke[]
+  rects?: readonly PdfRect[]
 }): Uint8Array {
-  const stream = contentStream(options.texts, options.strokes ?? [])
+  const stream = contentStream(options.texts, options.strokes ?? [], options.rects ?? [])
   return assemble([
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
