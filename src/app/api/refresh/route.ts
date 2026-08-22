@@ -137,18 +137,17 @@ async function holeKurse(
   // XETRA zuerst ueber Alpha Vantage: die einzige gemessen erreichbare
   // Gratisquelle, die deutsche Titel direkt fuehrt (25 Abrufe am Tag —
   // genug fuer die DAX-Haelfte, weil die Frische-Regel jeden Titel auf
-  // einen Abruf am Tag begrenzt). Beim ersten Mal die volle Historie,
-  // danach reicht das kompakte Fenster von 100 Tagen zum Auffuellen.
+  // einen Abruf am Tag begrenzt). Immer das kompakte Fenster von 100
+  // Handelstagen: outputsize=full lehnt der Gratis-Tarif inzwischen als
+  // Premium-Funktion ab (gemessen 2026-08-22), und 100 Tage reichen fuer
+  // Verlauf und Frische; die 52-Wochen-Spanne waechst mit jedem Tag nach.
   let alphaVantageFehler: string | null = null
   if (entry.venue === 'XETRA') {
     const alpha = process.env['ALPHA_VANTAGE_API_KEY']?.trim() ?? ''
     if (alpha.length > 0) {
       await alphaVantageTakt()
       try {
-        const provider = new AlphaVantagePriceProvider(
-          alpha,
-          neuesterTag === null ? 'full' : 'compact',
-        )
+        const provider = new AlphaVantagePriceProvider(alpha, 'compact')
         const series = await provider.fetchDailyHistory({ instrument: entry, since })
         return { bars: await saveBars(entry.ticker, series), hinweis: null }
       } catch (fehler) {
