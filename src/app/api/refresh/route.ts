@@ -223,6 +223,22 @@ async function holeKurse(
         }
       } catch (fehler) {
         alphaVantageFehler = message(fehler)
+        // Manche deutsche Titel fuehrt Alpha Vantage nur unter dem
+        // Frankfurter Suffix .FRK — ein zweiter Versuch lohnt genau
+        // dann, wenn XETRA schlicht keine Reihe hat (kein Limitfehler).
+        if (alphaVantageFehler.includes('keine Kursreihe')) {
+          await alphaVantageTakt()
+          try {
+            const frankfurt = new AlphaVantagePriceProvider(alpha, 'compact', undefined, 'FRK')
+            const series = await frankfurt.fetchDailyHistory({ instrument: entry, since })
+            return {
+              bars: await saveBars(entry.ticker, series),
+              hinweis: 'Kurse ueber Boerse Frankfurt (.FRK), XETRA fuehrt den Titel dort nicht',
+            }
+          } catch (frkFehler) {
+            alphaVantageFehler = `${alphaVantageFehler}; Frankfurt: ${message(frkFehler)}`
+          }
+        }
       }
     } else {
       alphaVantageFehler = 'ALPHA_VANTAGE_API_KEY fehlt'

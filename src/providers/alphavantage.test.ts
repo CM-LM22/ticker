@@ -113,19 +113,24 @@ describe('alphaVantageUrl', () => {
 })
 
 describe('parseSymbolSearch', () => {
-  it('liefert nur XETRA-Treffer und schneidet das Suffix ab', () => {
-    const treffer = parseSymbolSearch({
+  it('nimmt XETRA und Frankfurt, XETRA gewinnt bei doppeltem Kuerzel', () => {
+    const { treffer, rohSymbole } = parseSymbolSearch({
       bestMatches: [
         { '1. symbol': 'SAP.DEX', '2. name': 'SAP SE', '4. region': 'XETRA', '8. currency': 'EUR' },
         { '1. symbol': 'SAP', '2. name': 'SAP SE ADR', '4. region': 'United States', '8. currency': 'USD' },
         { '1. symbol': 'SAP.FRK', '2. name': 'SAP SE', '4. region': 'Frankfurt', '8. currency': 'EUR' },
+        { '1. symbol': 'RRTL.FRK', '2. name': 'RTL Group SA', '4. region': 'Frankfurt', '8. currency': 'EUR' },
       ],
     })
-    expect(treffer).toEqual([{ ticker: 'SAP', name: 'SAP SE', currency: 'EUR' }])
+    expect(treffer).toEqual([
+      { ticker: 'SAP', name: 'SAP SE', currency: 'EUR', suffix: 'DEX' },
+      { ticker: 'RRTL', name: 'RTL Group SA', currency: 'EUR', suffix: 'FRK' },
+    ])
+    expect(rohSymbole).toEqual(['SAP.DEX', 'SAP', 'SAP.FRK', 'RRTL.FRK'])
   })
 
   it('gibt eine leere Liste bei fehlenden bestMatches', () => {
-    expect(parseSymbolSearch({})).toEqual([])
+    expect(parseSymbolSearch({})).toEqual({ treffer: [], rohSymbole: [] })
   })
 
   it('erkennt die Absage-in-200 auch bei der Suche', () => {
@@ -135,7 +140,7 @@ describe('parseSymbolSearch', () => {
   })
 
   it('ueberspringt kaputte Einzeltreffer', () => {
-    const treffer = parseSymbolSearch({
+    const { treffer } = parseSymbolSearch({
       bestMatches: [
         null,
         { '1. symbol': 'BMW.DEX' },
@@ -143,7 +148,7 @@ describe('parseSymbolSearch', () => {
       ],
     })
     expect(treffer).toEqual([
-      { ticker: 'BMW', name: 'Bayerische Motoren Werke AG', currency: 'EUR' },
+      { ticker: 'BMW', name: 'Bayerische Motoren Werke AG', currency: 'EUR', suffix: 'DEX' },
     ])
   })
 })

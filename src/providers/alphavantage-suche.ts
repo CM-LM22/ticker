@@ -20,7 +20,13 @@ export async function holeXetraTreffer(query: string, apiKey: string): Promise<X
     headers: { Accept: 'application/json' },
   })
   if (!antwort.ok) throw new Error(`Alpha Vantage: HTTP ${antwort.status}`)
-  const treffer = parseSymbolSearch(await antwort.json())
+  const { treffer, rohSymbole } = parseSymbolSearch(await antwort.json())
+  // Messzeile fuer die Fehlersuche: was kam ueberhaupt, was blieb?
+  // Symbole sind unkritisch, nie Schluessel oder Werte.
+  console.info(
+    `suche xetra "${schluessel}": ${rohSymbole.length} Treffer roh, ${treffer.length} deutsch` +
+      (rohSymbole.length > 0 ? ` | roh: ${rohSymbole.slice(0, 8).join(', ')}` : ''),
+  )
   cache.set(schluessel, { treffer, geladen: Date.now() })
   return treffer
 }

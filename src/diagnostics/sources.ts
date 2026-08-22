@@ -154,6 +154,20 @@ export async function probeSources(): Promise<SourceProbe[]> {
           ok: false,
           detail: 'uebersprungen, ALPHA_VANTAGE_API_KEY nicht gesetzt',
         }),
+    alpha.length > 0
+      ? pruefe('Alpha Vantage Suche', 'Stichwort "RTL"', async () => {
+          const { symbolSearchUrl, parseSymbolSearch } = await import('../providers/alphavantage')
+          const { treffer, rohSymbole } = parseSymbolSearch(await json(symbolSearchUrl('RTL', alpha)))
+          return `${rohSymbole.length} Treffer roh, ${treffer.length} deutsch${
+            rohSymbole.length > 0 ? ` (${rohSymbole.slice(0, 6).join(', ')})` : ''
+          }`
+        })
+      : Promise.resolve({
+          quelle: 'Alpha Vantage Suche',
+          ziel: 'Stichwort "RTL"',
+          ok: false,
+          detail: 'uebersprungen, ALPHA_VANTAGE_API_KEY nicht gesetzt',
+        }),
     // Tradegate speist inzwischen die Live-Kurse der deutschen Titel;
     // die Probe bleibt als Erreichbarkeitsmessung. filings.xbrl.org
     // (amtliche ESEF-Jahresabschluesse) ist weiterhin nur gemessen,

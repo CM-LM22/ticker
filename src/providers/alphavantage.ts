@@ -30,9 +30,15 @@ export const ALPHAVANTAGE_CAPABILITIES: ProviderCapabilities = {
   verifiedAt: null,
 }
 
-/** XETRA-Titel laufen ueber das dokumentierte Suffix .DEX. */
-export function alphaVantageSymbol(entry: Pick<WatchlistEntry, 'ticker' | 'venue'>): string {
-  return entry.venue === 'XETRA' ? `${entry.ticker.toUpperCase()}.DEX` : entry.ticker.toUpperCase()
+/** XETRA-Titel laufen ueber das dokumentierte Suffix .DEX; manche
+ * deutsche Titel fuehrt Alpha Vantage nur unter .FRK (Frankfurt). */
+export function alphaVantageSymbol(
+  entry: Pick<WatchlistEntry, 'ticker' | 'venue'>,
+  suffix: 'DEX' | 'FRK' = 'DEX',
+): string {
+  return entry.venue === 'XETRA'
+    ? `${entry.ticker.toUpperCase()}.${suffix}`
+    : entry.ticker.toUpperCase()
 }
 
 export function alphaVantageUrl(
@@ -131,18 +137,27 @@ export function symbolSearchUrl(query: string, apiKey: string): string {
 }
 
 export interface XetraTreffer {
-  /** XETRA-Kuerzel ohne das Suffix .DEX. */
+  /** Boersenkuerzel ohne Suffix. */
   ticker: string
   name: string
   currency: string
+  /** Alpha-Vantage-Suffix des Fundes: DEX (XETRA) oder FRK (Frankfurt). */
+  suffix: 'DEX' | 'FRK'
 }
 
 /**
- * Aus der Symbolsuche nur die XETRA-Treffer (Suffix .DEX). Absagen
- * kommen auch hier als HTTP 200 mit Textfeld — derselbe Fallstrick
- * wie bei den Kursreihen.
+ * Aus der Symbolsuche die deutschen Treffer: XETRA (.DEX) und als
+ * Rueckfall Frankfurt (.FRK) — Alpha Vantage fuehrt manche deutsche
+ * Titel nur unter dem Frankfurter Suffix. Ein Kuerzel, das unter
+ * beiden auftaucht, zaehlt einmal, XETRA gewinnt. Absagen kommen auch
+ * hier als HTTP 200 mit Textfeld — derselbe Fallstrick wie bei den
+ * Kursreihen. Zusaetzlich meldet rohSymbole, was ueberhaupt kam, fuer
+ * die Fehlersuche im Protokoll.
  */
-export function parseSymbolSearch(raw: unknown): XetraTreffer[] {
+export function parseSymbolSearch(raw: unknown): {
+  treffer: XetraTreffer[]
+  rohSymbole: string[]
+} {
   if (typeof raw !== 'object' || raw === null) {
     throw new ProviderError(ALPHAVANTAGE_CAPABILITIES.id, 'Suche: unerwartete Antwort', false)
   }
@@ -153,24 +168,33 @@ export function parseSymbolSearch(raw: unknown): XetraTreffer[] {
   }
 
   const matches = daten['bestMatches']
-  if (!Array.isArray(matches)) return []
+  if (!Array.isArray(matches)) return { treffer: [], rohSymbole: [] }
 
-  const treffer: XetraTreffer[] = []
+  const rohSymbole: string[] = []
+  const nachTicker = new Map<string, XetraTreffer>()
   for (const roh of matches) {
     if (typeof roh !== 'object' || roh === null) continue
     const eintrag = roh as Record<string, unknown>
     const symbol = eintrag['1. symbol']
     const name = eintrag['2. name']
     const currency = eintrag['8. currency']
-    if (typeof symbol !== 'string' || !symbol.toUpperCase().endsWith('.DEX')) continue
+    if (typeof symbol !== 'string') continue
+    rohSymbole.push(symbol)
+    const gross = symbol.toUpperCase()
+    const suffix = gross.endsWith('.DEX') ? 'DEX' : gross.endsWith('.FRK') ? 'FRK' : null
+    if (suffix === null) continue
     if (typeof name !== 'string' || name.length === 0) continue
-    treffer.push({
-      ticker: symbol.toUpperCase().slice(0, -'.DEX'.length),
+    const ticker = gross.slice(0, -4)
+    const vorhanden = nachTicker.get(ticker)
+    if (vorhanden !== undefined && vorhanden.suffix === 'DEX') continue
+    nachTicker.set(ticker, {
+      ticker,
       name,
       currency: typeof currency === 'string' ? currency : 'EUR',
+      suffix,
     })
   }
-  return treffer
+  return { treffer: [...nachTicker.values()], rohSymbole }
 }
 
 export class AlphaVantagePriceProvider implements PriceProvider {
@@ -180,13 +204,14 @@ export class AlphaVantagePriceProvider implements PriceProvider {
     private readonly apiKey: string,
     private readonly outputSize: 'full' | 'compact' = 'compact',
     private readonly fetchJson: (url: string) => Promise<unknown> = defaultFetchJson,
+    private readonly suffix: 'DEX' | 'FRK' = 'DEX',
   ) {}
 
   async fetchDailyHistory(request: PriceRequest): Promise<PriceSeries> {
     if (this.apiKey.length === 0) {
       throw new ProviderError(ALPHAVANTAGE_CAPABILITIES.id, 'ALPHA_VANTAGE_API_KEY fehlt', false)
     }
-    const symbol = alphaVantageSymbol(request.instrument)
+    const symbol = alphaVantageSymbol(request.instrument, this.suffix)
     const raw = await this.fetchJson(alphaVantageUrl(symbol, this.apiKey, this.outputSize))
     const series = parseAlphaVantageDaily(raw, {
       ticker: request.instrument.ticker,
