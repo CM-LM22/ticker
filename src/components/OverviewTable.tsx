@@ -239,6 +239,7 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
 
       {quoteHinweis !== null && <p className="muted footnote">{quoteHinweis}</p>}
 
+      <div className="table-scroll">
       <table className="overview">
         <thead>
           <tr>
@@ -324,6 +325,7 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
           })}
         </tbody>
       </table>
+      </div>
 
       {sichtbar.length === 0 && (
         <p className="muted">Kein Titel passt zu dieser Suche.</p>

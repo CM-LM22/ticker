@@ -41,6 +41,7 @@ export default async function BerichtePage() {
         fundamentalsSource={data.fundamentalsSource}
       />
 
+      <div className="table-scroll">
       <table className="brief">
         <thead>
           <tr>
@@ -94,6 +95,7 @@ export default async function BerichtePage() {
           ))}
         </tbody>
       </table>
+      </div>
 
       <Disclaimer />
     </main>

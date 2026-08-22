@@ -285,6 +285,21 @@ table.overview td {
   .sparkline {
     width: 70px;
   }
+
+  /* Auf schmalen Schirmen darf die haftende Titelspalte nicht den
+     halben Bildschirm einnehmen: Name unter das Kuerzel, gekuerzt. */
+  table.overview th:first-child,
+  table.overview td:first-child {
+    max-width: 8.5rem;
+  }
+
+  table.overview td:first-child .muted {
+    display: block;
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 td.num,
@@ -445,6 +460,30 @@ table.brief {
   gap: 0.75rem;
   flex-wrap: wrap;
   margin: 0 0 0.9rem;
+  /* Beim Hochscrollen oben haften bleiben, damit Suche und
+     Boersen-Reiter jederzeit erreichbar sind. */
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg);
+  padding: 0.6rem 0;
+}
+
+/* Breite Tabellen scrollen im eigenen Container statt mit der Seite;
+   die Titelspalte haftet dabei links, damit beim seitlichen Scrollen
+   sichtbar bleibt, zu welchem Titel eine Zeile gehoert. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll table th:first-child,
+.table-scroll table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
 }
 
 .toolbar input[type='search'] {
