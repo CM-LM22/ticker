@@ -211,7 +211,10 @@ async function holeKonsens(
   // Nur die juengsten sechs Monate aufheben, der Rest ist Anzeige-Ballast.
   await saveTrends(trends.slice(0, 6))
   const neuester = trends[0]
-  if (neuester !== undefined) {
+  // Ohne Vergleichsstand gibt es keine Verschiebung, nur einen ersten
+  // Stand. Der steht in der Konsens-Tabelle; eine Meldung "Aenderung
+  // von nichts" waere 24 Zeilen Rauschen beim Erstlauf.
+  if (neuester !== undefined && vorher !== null) {
     const action = trendToAction(vorher, neuester)
     if (action !== null) gesammelt.push(action)
   }
