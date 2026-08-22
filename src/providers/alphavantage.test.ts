@@ -4,6 +4,7 @@ import {
   alphaVantageSymbol,
   alphaVantageUrl,
   parseAlphaVantageDaily,
+  parseSymbolSearch,
 } from './alphavantage'
 import { ProviderError } from './types'
 
@@ -108,5 +109,41 @@ describe('alphaVantageUrl', () => {
     const url = alphaVantageUrl('SAP.DEX', 'k', 'compact')
     expect(url).toContain('function=TIME_SERIES_DAILY')
     expect(url).toContain('outputsize=compact')
+  })
+})
+
+describe('parseSymbolSearch', () => {
+  it('liefert nur XETRA-Treffer und schneidet das Suffix ab', () => {
+    const treffer = parseSymbolSearch({
+      bestMatches: [
+        { '1. symbol': 'SAP.DEX', '2. name': 'SAP SE', '4. region': 'XETRA', '8. currency': 'EUR' },
+        { '1. symbol': 'SAP', '2. name': 'SAP SE ADR', '4. region': 'United States', '8. currency': 'USD' },
+        { '1. symbol': 'SAP.FRK', '2. name': 'SAP SE', '4. region': 'Frankfurt', '8. currency': 'EUR' },
+      ],
+    })
+    expect(treffer).toEqual([{ ticker: 'SAP', name: 'SAP SE', currency: 'EUR' }])
+  })
+
+  it('gibt eine leere Liste bei fehlenden bestMatches', () => {
+    expect(parseSymbolSearch({})).toEqual([])
+  })
+
+  it('erkennt die Absage-in-200 auch bei der Suche', () => {
+    expect(() =>
+      parseSymbolSearch({ Information: 'Thank you for using Alpha Vantage! Our standard API rate limit is 25 requests per day.' }),
+    ).toThrow(/25 requests/)
+  })
+
+  it('ueberspringt kaputte Einzeltreffer', () => {
+    const treffer = parseSymbolSearch({
+      bestMatches: [
+        null,
+        { '1. symbol': 'BMW.DEX' },
+        { '1. symbol': 'BMW.DEX', '2. name': 'Bayerische Motoren Werke AG' },
+      ],
+    })
+    expect(treffer).toEqual([
+      { ticker: 'BMW', name: 'Bayerische Motoren Werke AG', currency: 'EUR' },
+    ])
   })
 })

@@ -122,6 +122,57 @@ export function parseAlphaVantageDaily(
   }
 }
 
+export function symbolSearchUrl(query: string, apiKey: string): string {
+  const url = new URL('https://www.alphavantage.co/query')
+  url.searchParams.set('function', 'SYMBOL_SEARCH')
+  url.searchParams.set('keywords', query)
+  url.searchParams.set('apikey', apiKey)
+  return url.toString()
+}
+
+export interface XetraTreffer {
+  /** XETRA-Kuerzel ohne das Suffix .DEX. */
+  ticker: string
+  name: string
+  currency: string
+}
+
+/**
+ * Aus der Symbolsuche nur die XETRA-Treffer (Suffix .DEX). Absagen
+ * kommen auch hier als HTTP 200 mit Textfeld — derselbe Fallstrick
+ * wie bei den Kursreihen.
+ */
+export function parseSymbolSearch(raw: unknown): XetraTreffer[] {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new ProviderError(ALPHAVANTAGE_CAPABILITIES.id, 'Suche: unerwartete Antwort', false)
+  }
+  const daten = raw as Record<string, unknown>
+  const absage = daten['Note'] ?? daten['Information'] ?? daten['Error Message']
+  if (typeof absage === 'string') {
+    throw new ProviderError(ALPHAVANTAGE_CAPABILITIES.id, `Suche: ${absage.slice(0, 140)}`, false)
+  }
+
+  const matches = daten['bestMatches']
+  if (!Array.isArray(matches)) return []
+
+  const treffer: XetraTreffer[] = []
+  for (const roh of matches) {
+    if (typeof roh !== 'object' || roh === null) continue
+    const eintrag = roh as Record<string, unknown>
+    const symbol = eintrag['1. symbol']
+    const name = eintrag['2. name']
+    const currency = eintrag['8. currency']
+    if (typeof symbol !== 'string' || !symbol.toUpperCase().endsWith('.DEX')) continue
+    if (typeof name !== 'string' || name.length === 0) continue
+    treffer.push({
+      ticker: symbol.toUpperCase().slice(0, -'.DEX'.length),
+      name,
+      currency: typeof currency === 'string' ? currency : 'EUR',
+    })
+  }
+  return treffer
+}
+
 export class AlphaVantagePriceProvider implements PriceProvider {
   readonly capabilities = ALPHAVANTAGE_CAPABILITIES
 

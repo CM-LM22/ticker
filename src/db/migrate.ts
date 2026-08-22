@@ -104,11 +104,21 @@ export async function ensureSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS custom_titel (
       ticker            text PRIMARY KEY,
       name              text NOT NULL,
-      venue             text NOT NULL CHECK (venue IN ('NASDAQ', 'NYSE')),
+      venue             text NOT NULL,
       expected_coverage text NOT NULL,
       cik               char(10),
       added_at          timestamptz NOT NULL DEFAULT now()
     )
+  `
+
+  // Die erste Fassung erlaubte nur NASDAQ und NYSE; seit XETRA-Titel
+  // hinzukommen, wird die Pruefung hier nachgezogen. Drop und Add sind
+  // idempotent und billig, deshalb duerfen sie bei jedem Lauf laufen.
+  await sql`ALTER TABLE custom_titel DROP CONSTRAINT IF EXISTS custom_titel_venue_check`
+  await sql`ALTER TABLE custom_titel DROP CONSTRAINT IF EXISTS custom_titel_venue_ok`
+  await sql`
+    ALTER TABLE custom_titel
+      ADD CONSTRAINT custom_titel_venue_ok CHECK (venue IN ('NASDAQ', 'NYSE', 'XETRA'))
   `
 
   // Analystenkonsens als Monatsstand je Titel. Die Veraenderung

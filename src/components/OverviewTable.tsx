@@ -71,6 +71,9 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
   const [quoteHinweis, setQuoteHinweis] = useState<string | null>(null)
   const [sucheTreffer, setSucheTreffer] = useState<SucheTreffer[]>([])
   const [sucheHinweis, setSucheHinweis] = useState<string | null>(null)
+  const [xetraTreffer, setXetraTreffer] = useState<SucheTreffer[] | null>(null)
+  const [xetraHinweis, setXetraHinweis] = useState<string | null>(null)
+  const [xetraLaeuft, setXetraLaeuft] = useState(false)
   const [addStatus, setAddStatus] = useState<string | null>(null)
   const [addLaeuft, setAddLaeuft] = useState(false)
 
@@ -79,6 +82,8 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
   // 400 ms Ruhe vor dem Abruf, sonst je Tastendruck eine Anfrage.
   useEffect(() => {
     const suche = filter.trim()
+    setXetraTreffer(null)
+    setXetraHinweis(null)
     if (suche.length < 2) {
       setSucheTreffer([])
       setSucheHinweis(null)
@@ -103,14 +108,31 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
     }
   }, [filter])
 
-  async function hinzufuegen(ticker: string): Promise<void> {
+  async function xetraSuchen(): Promise<void> {
+    const suche = filter.trim()
+    if (suche.length < 2) return
+    setXetraLaeuft(true)
+    setXetraHinweis(null)
+    try {
+      const antwort = await fetch(`/api/suche?q=${encodeURIComponent(suche)}&markt=xetra`)
+      const daten = (await antwort.json()) as SucheAntwort
+      setXetraTreffer(daten.treffer)
+      setXetraHinweis(daten.hinweis)
+    } catch {
+      setXetraHinweis('XETRA-Suche gerade nicht erreichbar.')
+    } finally {
+      setXetraLaeuft(false)
+    }
+  }
+
+  async function hinzufuegen(ticker: string, markt?: 'xetra'): Promise<void> {
     setAddLaeuft(true)
     setAddStatus(`${ticker} wird hinzugefuegt …`)
     try {
       const antwort = await fetch('/api/watchlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticker }),
+        body: JSON.stringify(markt === undefined ? { ticker } : { ticker, markt }),
       })
       const daten = (await antwort.json()) as { ok: boolean; fehler?: string }
       if (!daten.ok) {
@@ -313,8 +335,8 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
         <section className="add-panel">
           <h2>Neu hinzufuegen</h2>
           <p className="muted footnote">
-            Treffer aus dem offiziellen SEC-Verzeichnis (Nasdaq und NYSE). Nach dem Hinzufuegen
-            werden Kurse und Berichtszahlen sofort geholt.
+            US-Titel aus dem offiziellen SEC-Verzeichnis (Nasdaq und NYSE), deutsche Titel ueber
+            die XETRA-Suche darunter. Nach dem Hinzufuegen werden die Daten sofort geholt.
           </p>
           {sucheHinweis !== null && <p className="muted footnote">{sucheHinweis}</p>}
           {sucheTreffer.filter((treffer) => !treffer.imBestand).length === 0 &&
@@ -342,6 +364,44 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
                 </li>
               ))}
           </ul>
+
+          <div className="xetra-suche">
+            {xetraTreffer === null ? (
+              <p className="footnote">
+                <button type="button" disabled={xetraLaeuft} onClick={() => void xetraSuchen()}>
+                  {xetraLaeuft ? 'Sucht …' : 'Auch deutsche Titel (XETRA) suchen'}
+                </button>{' '}
+                <span className="muted">
+                  Verbraucht einen von 25 Alpha-Vantage-Tagesabrufen, deshalb erst auf Klick.
+                </span>
+              </p>
+            ) : (
+              <>
+                {xetraTreffer.filter((treffer) => !treffer.imBestand).length === 0 &&
+                  xetraHinweis === null && (
+                    <p className="muted footnote">Kein XETRA-Treffer fuer diese Suche.</p>
+                  )}
+                <ul className="add-list">
+                  {xetraTreffer
+                    .filter((treffer) => !treffer.imBestand)
+                    .map((treffer) => (
+                      <li key={`xetra-${treffer.ticker}`}>
+                        <strong>{treffer.ticker}</strong>
+                        <span className="muted"> {treffer.name} · XETRA</span>{' '}
+                        <button
+                          type="button"
+                          disabled={addLaeuft}
+                          onClick={() => void hinzufuegen(treffer.ticker, 'xetra')}
+                        >
+                          Hinzufuegen
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </>
+            )}
+            {xetraHinweis !== null && <p className="muted footnote">{xetraHinweis}</p>}
+          </div>
         </section>
       )}
     </>

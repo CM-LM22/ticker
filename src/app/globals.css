@@ -549,6 +549,7 @@ table.brief {
 }
 
 .add-list button,
+.xetra-suche button,
 .entfernen button {
   padding: 0.25rem 0.6rem;
   border: 1px solid var(--accent);
