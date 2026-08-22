@@ -182,8 +182,11 @@ export function extraherePerioden(
   return perioden
 }
 
+// Deutsche Ueberschriften zuerst; englische dazu, weil Emittenten aus
+// Luxemburg oder den Niederlanden (RTL, Airbus, QIAGEN) ihre
+// ESEF-Berichte auf Englisch einreichen.
 const LAGEBERICHT_START =
-  /(zusammengefasster\s+lagebericht|konzernlagebericht|wirtschaftsbericht|gesch(ae|ä)ftsverlauf\s+und\s+lage|ertragslage)/i
+  /(zusammengefasster\s+lagebericht|konzernlagebericht|wirtschaftsbericht|gesch(ae|ä)ftsverlauf\s+und\s+lage|ertragslage|management\s+report|business\s+review|review\s+of\s+the\s+year|financial\s+review)/i
 
 /**
  * Woertlicher Auszug aus dem Lagebericht eines deutschen
@@ -247,7 +250,8 @@ export async function holeEsefPerioden(filing: EsefFiling): Promise<ReportedPeri
   })
 }
 
-const PROGNOSE_START = /^(prognosebericht|prognose(n)?\b|ausblick\b|erwartete\s+entwicklung)/i
+const PROGNOSE_START =
+  /^(prognosebericht|prognose(n)?\b|ausblick\b|erwartete\s+entwicklung|outlook\b|guidance\b)/i
 
 /**
  * Die Prognose des Managements aus einem deutschen Jahresbericht
