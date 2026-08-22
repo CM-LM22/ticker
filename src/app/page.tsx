@@ -6,6 +6,7 @@ import { Disclaimer } from '@/components/Disclaimer'
 import { OverviewTable } from '@/components/OverviewTable'
 import type { UebersichtZeile } from '@/components/OverviewTable'
 import { RefreshButton } from '@/components/RefreshButton'
+import { eigeneTicker } from '@/data/gesamt-watchlist'
 import { loadTitleData } from '@/data/load'
 import { window52Weeks } from '@/domain/price-series'
 import { rank } from '@/domain/screening'
@@ -41,7 +42,10 @@ function sparkline(bars: readonly { date: string; close: number }[]): {
 }
 
 export default async function Home() {
-  const { titles, asOf, isDemo, priceSource, fundamentalsSource } = await loadTitleData()
+  const [{ titles, asOf, isDemo, priceSource, fundamentalsSource }, eigene] = await Promise.all([
+    loadTitleData(),
+    eigeneTicker(),
+  ])
 
   const order = new Map(
     rank(titles.map((title) => title.screen)).map((result, index) => [result.ticker, index]),
@@ -57,6 +61,7 @@ export default async function Home() {
       ticker: title.entry.ticker,
       name: title.entry.name,
       venue: title.entry.venue,
+      eigen: eigene.has(title.entry.ticker),
       kurs: title.price?.last.close ?? null,
       currency: title.price?.currency ?? null,
       sparkPath: spark.path,
@@ -85,11 +90,9 @@ export default async function Home() {
         <KopfSchalter sprache={sprache} />
       </div>
 
-      <p className="actions">
+      <p className="actions chips">
         <Link href="/berichte">{t.berichteLink}</Link>
-        {' · '}
         <Link href="/analysten">{t.analystenLink}</Link>
-        {' · '}
         <Link href="/diagnose">{t.diagnoseLink}</Link>
       </p>
 

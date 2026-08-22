@@ -60,10 +60,13 @@ async function ladeKonsens(ticker: string): Promise<TrendPair | null> {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ ticker: string }> },
 ): Promise<NextResponse> {
   const { ticker } = await context.params
+  // Zurueck-Link im PDF: die Hauptadresse, sonst der aufgerufene Host.
+  const produktion = process.env['VERCEL_PROJECT_PRODUCTION_URL']?.trim() ?? ''
+  const appUrl = produktion.length > 0 ? `https://${produktion}/` : `${new URL(request.url).origin}/`
   const data = await loadTitleData()
   const title = data.titles.find(
     (candidate) => candidate.entry.ticker.toLowerCase() === ticker.toLowerCase(),
@@ -87,7 +90,15 @@ export async function GET(
     konsensVormonat: konsens?.vormonat ?? null,
   })
   const bars = title.series === null ? [] : window52Weeks(title.series, data.asOf)
-  const bytes = renderStockPdf({ brief, bars, asOf: data.asOf, isDemo: data.isDemo, auszug, aktionen })
+  const bytes = renderStockPdf({
+    brief,
+    bars,
+    asOf: data.asOf,
+    isDemo: data.isDemo,
+    auszug,
+    aktionen,
+    appUrl,
+  })
 
   return new NextResponse(Buffer.from(bytes), {
     headers: {

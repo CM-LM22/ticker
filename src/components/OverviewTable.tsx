@@ -11,6 +11,8 @@ export interface UebersichtZeile {
   ticker: string
   name: string
   venue: 'NASDAQ' | 'NYSE' | 'XETRA'
+  /** Selbst hinzugefuegt (nicht Teil des festen Grundstocks). */
+  eigen: boolean
   kurs: number | null
   currency: string | null
   sparkPath: string | null
@@ -36,7 +38,7 @@ interface QuotesAntwort {
   hinweis: string | null
 }
 
-const TABS = ['alle', 'NASDAQ', 'XETRA'] as const
+const TABS = ['alle', 'NASDAQ', 'DAX', 'XETRA-EIGEN'] as const
 
 interface SucheTreffer {
   ticker: string
@@ -203,13 +205,35 @@ export function OverviewTable({
   const sichtbar = useMemo(() => {
     const suche = filter.trim().toLowerCase()
     return rows.filter((zeile) => {
-      if (tab !== 'alle' && zeile.venue !== tab) return false
+      // Nasdaq: alle US-Titel. DAX: der feste deutsche Grundstock.
+      // Xetra: die selbst hinzugefuegten deutschen Titel.
+      if (tab === 'NASDAQ' && zeile.venue === 'XETRA') return false
+      if (tab === 'DAX' && (zeile.venue !== 'XETRA' || zeile.eigen)) return false
+      if (tab === 'XETRA-EIGEN' && (zeile.venue !== 'XETRA' || !zeile.eigen)) return false
       if (suche.length === 0) return true
       return (
         zeile.ticker.toLowerCase().includes(suche) || zeile.name.toLowerCase().includes(suche)
       )
     })
   }, [rows, filter, tab])
+
+  async function zeileEntfernen(ticker: string): Promise<void> {
+    setAddLaeuft(true)
+    try {
+      const antwort = await fetch('/api/watchlist', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker }),
+      })
+      const daten = (await antwort.json()) as { ok: boolean; fehler?: string }
+      setAddStatus(daten.ok ? null : (daten.fehler ?? 'Entfernen fehlgeschlagen.'))
+      if (daten.ok) router.refresh()
+    } catch {
+      setAddStatus('Entfernen fehlgeschlagen, bitte nochmal versuchen.')
+    } finally {
+      setAddLaeuft(false)
+    }
+  }
 
   return (
     <>
@@ -231,7 +255,13 @@ export function OverviewTable({
               className={tab === wert ? 'tab aktiv' : 'tab'}
               onClick={() => setTab(wert)}
             >
-              {wert === 'alle' ? t.tabAlle : wert === 'NASDAQ' ? t.tabNasdaq : t.tabDax}
+              {wert === 'alle'
+                ? t.tabAlle
+                : wert === 'NASDAQ'
+                  ? t.tabNasdaq
+                  : wert === 'DAX'
+                    ? t.tabDax
+                    : t.tabXetra}
             </button>
           ))}
         </div>
@@ -273,6 +303,19 @@ export function OverviewTable({
                     <strong>{zeile.ticker}</strong>
                   </Link>
                   <span className="muted"> {zeile.name}</span>
+                  {tab === 'XETRA-EIGEN' && zeile.eigen && (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        className="zeile-entfernen"
+                        disabled={addLaeuft}
+                        onClick={() => void zeileEntfernen(zeile.ticker)}
+                      >
+                        {t.entfernen}
+                      </button>
+                    </>
+                  )}
                 </td>
                 <td className="num">
                   {preis === null || waehrung === null ? (
@@ -335,7 +378,7 @@ export function OverviewTable({
       </table>
 
       {sichtbar.length === 0 && (
-        <p className="muted">{t.keinTreffer}</p>
+        <p className="muted">{tab === 'XETRA-EIGEN' && filter.trim().length === 0 ? t.xetraLeer : t.keinTreffer}</p>
       )}
 
       {addStatus !== null && <p className="footnote">{addStatus}</p>}

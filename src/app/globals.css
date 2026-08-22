@@ -738,3 +738,32 @@ main.uebersicht .table-scroll > :not(table) {
   margin: 0.6rem 0;
   font-size: 0.9rem;
 }
+
+/* Kaestchen-Knoepfe statt blauer unterstrichener Links: invertiert
+   (helle Schrift auf dunklem Grund im Hellmodus und umgekehrt). */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.chips a {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 0.45rem;
+  background: var(--fg);
+  color: var(--bg);
+  text-decoration: none;
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.zeile-entfernen {
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--neg);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--neg);
+  font-size: 0.7rem;
+  cursor: pointer;
+}

@@ -2,7 +2,7 @@ import type { PriceBar } from '../domain/price-series'
 import type { StockBrief } from '../domain/stock-brief'
 import { formatCompact, formatDay, formatPercent, formatPrice } from './format'
 import { A4_PORTRAIT, helveticaWidth, renderSinglePagePdf, truncateToWidth } from './pdf'
-import type { PdfRect, PdfStroke, PdfText } from './pdf'
+import type { PdfLink, PdfRect, PdfStroke, PdfText } from './pdf'
 
 /**
  * Der Ein-Seiten-Bericht je Titel als PDF: Kopf mit Kurs, 52-Wochen-
@@ -32,6 +32,8 @@ export interface StockPdfInput {
   } | null
   /** Juengste Konsens-Bewegungen, neueste zuerst. */
   aktionen: readonly KonsensBewegung[]
+  /** Adresse der App fuer den Zurueck-Link im PDF, wenn bekannt. */
+  appUrl?: string | null
 }
 
 /** Zeilenumbruch nach gemessener Breite, fuer den Zitatblock. */
@@ -172,7 +174,22 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
   const texts: PdfText[] = []
   const strokes: PdfStroke[] = []
   const rects: PdfRect[] = []
+  const links: PdfLink[] = []
   let y = 800
+
+  // Klickbarer Rueckweg in die App, ganz oben — aus dem PDF-Viewer
+  // gibt es sonst keinen.
+  if (input.appUrl != null && input.appUrl.length > 0) {
+    const beschriftung = '← Zurueck zur Uebersicht'
+    texts.push({ x: LINKS, y: 824, size: 8, font: 'regular', text: beschriftung })
+    links.push({
+      x: LINKS - 2,
+      y: 821,
+      width: helveticaWidth(beschriftung, 8) + 4,
+      height: 12,
+      url: input.appUrl,
+    })
+  }
 
   // Kopf: Ticker, Name, Handelsplatz, Stand.
   texts.push({ x: LINKS, y, size: 18, font: 'bold', text: brief.ticker })
@@ -509,5 +526,6 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
     texts,
     strokes,
     rects,
+    links,
   })
 }

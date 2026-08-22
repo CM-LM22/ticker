@@ -32,6 +32,15 @@ export interface PdfRect {
   grau: number
 }
 
+/** Klickbare Flaeche, die eine URL oeffnet. */
+export interface PdfLink {
+  x: number
+  y: number
+  width: number
+  height: number
+  url: string
+}
+
 const UNICODE_TO_WINANSI: ReadonlyMap<number, number> = new Map([
   [0x20ac, 0x80],
   [0x201a, 0x82],
@@ -193,15 +202,25 @@ export function renderSinglePagePdf(options: {
   texts: readonly PdfText[]
   strokes?: readonly PdfStroke[]
   rects?: readonly PdfRect[]
+  links?: readonly PdfLink[]
 }): Uint8Array {
   const stream = contentStream(options.texts, options.strokes ?? [], options.rects ?? [])
+  const links = options.links ?? []
+  // Annotationsobjekte haengen hinter den sechs festen Objekten.
+  const annotRefs = links.map((_, index) => `${7 + index} 0 R`).join(' ')
+  const annots = links.length === 0 ? '' : ` /Annots [${annotRefs}]`
+  const linkObjekte = links.map(
+    (link) =>
+      `<< /Type /Annot /Subtype /Link /Rect [${link.x.toFixed(2)} ${link.y.toFixed(2)} ${(link.x + link.width).toFixed(2)} ${(link.y + link.height).toFixed(2)}] /Border [0 0 0] /A << /S /URI /URI (${link.url.replace(/[()\\]/g, '')}) >> >>`,
+  )
   return assemble([
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${options.width} ${options.height}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${options.width} ${options.height}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R${annots} >>`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
     `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    ...linkObjekte,
   ])
 }
 

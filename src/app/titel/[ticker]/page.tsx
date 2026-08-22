@@ -69,13 +69,19 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
   if (title === undefined) notFound()
 
   const { entry, price, fundamentals, earnings, screen: result, series } = title
+  // Der Original-Report: das Dokument hinter dem Auszug, sonst die
+  // juengste berichtete Periode bei der Quelle.
+  const berichtUrl =
+    auszug?.dokumentUrl ??
+    fundamentals?.latest?.period.sourceUrl ??
+    fundamentals?.periods[0]?.sourceUrl ??
+    null
   const bars52 = series === null ? [] : window52Weeks(series, data.asOf)
 
   return (
     <main>
-      <p className="back">
+      <p className="back chips">
         <Link href="/">{t.zurueck}</Link>
-        {'  '}
         <a
           href={`/titel/${entry.ticker.toLowerCase()}/bericht.pdf`}
           target="_blank"
@@ -83,12 +89,12 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
         >
           {t.einSeiten}
         </a>
-        {eigene.has(entry.ticker) && (
-          <>
-            {'  '}
-            <EntfernenButton ticker={entry.ticker} />
-          </>
+        {berichtUrl !== null && (
+          <a href={berichtUrl} target="_blank" rel="noopener">
+            {t.reportOriginal}
+          </a>
         )}
+        {eigene.has(entry.ticker) && <EntfernenButton ticker={entry.ticker} />}
       </p>
 
       <h1>
