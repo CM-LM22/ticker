@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { gesamteWatchlist } from '@/data/gesamt-watchlist'
 import { holeXetraTreffer } from '@/providers/alphavantage-suche'
+import { holeTradegateTreffer } from '@/providers/tradegate-suche'
 import {
   ladeSucheIndex,
   searchCompanies,
@@ -9,12 +10,11 @@ import {
 } from '@/providers/sec-suche'
 
 /**
- * Titelsuche fuers Hinzufuegen. Zwei Zweige:
- * - Standard: das SEC-Verzeichnis (im Speicher gehalten, ohne
- *   Kontingent) fuer Nasdaq- und NYSE-Titel.
- * - markt=xetra: die Alpha-Vantage-Symbolsuche fuer deutsche Titel
- *   (Suffix .DEX). Die kostet einen der 25 Tagesabrufe und laeuft
- *   deshalb nur auf ausdruecklichen Klick, mit Query-Cache.
+ * Titelsuche fuers Hinzufuegen. Standard: das SEC-Verzeichnis fuer
+ * US-Titel und die Tradegate-Kurssuche fuer deutsche — beide frei und
+ * ohne Abruflimit, deshalb laufen sie automatisch beim Tippen.
+ * markt=xetra bleibt als Rueckfall: die Alpha-Vantage-Symbolsuche
+ * (kostet einen der 25 Tagesabrufe, nur auf ausdruecklichen Klick).
  * Jeder Treffer sagt, ob er schon in der Watchlist steht.
  */
 export const dynamic = 'force-dynamic'
@@ -26,6 +26,9 @@ interface Treffer {
   imBestand: boolean
   hinzufuegbar: boolean
   grund: string | null
+  /** Weg des Hinzufuegens: SEC-Verzeichnis oder Tradegate (mit ISIN). */
+  markt: 'us' | 'xetra' | 'tradegate'
+  isin?: string
 }
 
 async function xetraSuche(q: string): Promise<NextResponse> {
@@ -48,6 +51,7 @@ async function xetraSuche(q: string): Promise<NextResponse> {
         imBestand,
         hinzufuegbar: !imBestand,
         grund: imBestand ? 'schon in der Watchlist' : null,
+        markt: 'xetra' as const,
       }
     })
     return NextResponse.json({ treffer, hinweis: null })
@@ -95,9 +99,37 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           : venue === null
             ? `Handelsplatz ${eintrag.exchange === '' ? 'unbekannt' : eintrag.exchange} wird nicht unterstuetzt`
             : null,
+        markt: 'us' as const,
       }
     })
-    return NextResponse.json({ treffer, hinweis: null })
+
+    // Deutsche Titel von Tradegate, parallel und ohne Limit. Ein
+    // Fehlschlag hier laesst die US-Treffer unangetastet.
+    let tradegateHinweis: string | null = null
+    try {
+      const isins = new Set(
+        watchlist.flatMap((entry) => (entry.isin === undefined ? [] : [entry.isin])),
+      )
+      const deutsche = (await holeTradegateTreffer(q)).map((eintrag) => {
+        const imBestand = isins.has(eintrag.isin)
+        return {
+          ticker: eintrag.wkn ?? eintrag.isin,
+          name: eintrag.name,
+          exchange: 'Tradegate/XETRA',
+          imBestand,
+          hinzufuegbar: !imBestand,
+          grund: imBestand ? 'schon in der Watchlist' : null,
+          markt: 'tradegate' as const,
+          isin: eintrag.isin,
+        }
+      })
+      treffer.push(...deutsche)
+    } catch (fehler) {
+      tradegateHinweis = 'Deutsche Suche (Tradegate) gerade nicht erreichbar.'
+      console.warn('suche tradegate:', fehler)
+    }
+
+    return NextResponse.json({ treffer, hinweis: tradegateHinweis })
   } catch (fehler) {
     console.warn('suche: SEC-Verzeichnis nicht lesbar:', fehler)
     return NextResponse.json(

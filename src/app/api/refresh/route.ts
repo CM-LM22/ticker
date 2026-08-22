@@ -245,6 +245,48 @@ async function holeKurse(
     }
   }
 
+  // Erstbefuellung ohne Alpha Vantage: Ein per Tradegate-Suche
+  // hinzugefuegter Titel hat eine ISIN, aber noch keine Historie und
+  // keine Vergleichsbasis fuer den 15-Prozent-Wachhund. ISIN und Name
+  // stammen hier aus der Quelle selbst und der Nutzer hat den Namen
+  // beim Hinzufuegen bestaetigt — dokumentierte Ausnahme: der erste
+  // Tagesschluss wird direkt uebernommen, die Historie waechst dann
+  // taeglich.
+  if (entry.venue === 'XETRA' && entry.isin !== undefined && neuesterTag === null) {
+    const schlussTag = tradegateSchlussTag(heute)
+    if (schlussTag !== null) {
+      try {
+        const quote = await fetchTradegateQuote(entry.isin)
+        const bars = await saveBars(entry.ticker, {
+          ticker: entry.ticker,
+          currency: 'EUR',
+          source: 'tradegate',
+          bars: [
+            {
+              date: schlussTag,
+              open: quote.last,
+              high: quote.last,
+              low: quote.last,
+              close: quote.last,
+              volume: null,
+            },
+          ],
+        })
+        return {
+          bars,
+          hinweis:
+            'Erster Kurs von Tradegate; die Historie waechst ab jetzt taeglich' +
+            (alphaVantageFehler === null ? '' : ` (Alpha Vantage: ${alphaVantageFehler})`),
+        }
+      } catch (fehler) {
+        alphaVantageFehler =
+          alphaVantageFehler === null
+            ? `Tradegate: ${message(fehler)}`
+            : `${alphaVantageFehler}; Tradegate: ${message(fehler)}`
+      }
+    }
+  }
+
   const twelve = process.env['TWELVEDATA_API_KEY']?.trim() ?? ''
   if (twelve.length === 0) {
     throw new Error(

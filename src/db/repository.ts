@@ -485,10 +485,10 @@ export async function latestClose(
 export async function loadCustomTitles(): Promise<WatchlistEntry[]> {
   const sql = getSql()
   const rows = (await sql`
-    SELECT ticker, name, venue, expected_coverage, cik
+    SELECT ticker, name, venue, expected_coverage, cik, isin
     FROM custom_titel
     ORDER BY added_at
-  `) as { ticker: string; name: string; venue: string; expected_coverage: string; cik: string | null }[]
+  `) as { ticker: string; name: string; venue: string; expected_coverage: string; cik: string | null; isin: string | null }[]
 
   const eintraege: WatchlistEntry[] = []
   for (const row of rows) {
@@ -498,6 +498,7 @@ export async function loadCustomTitles(): Promise<WatchlistEntry[]> {
       venue: row.venue,
       expectedCoverage: row.expected_coverage,
       ...(row.cik === null ? {} : { cik: row.cik }),
+      ...(row.isin === null ? {} : { isin: row.isin.trim() }),
     })
     if (geprueft.success) {
       eintraege.push(geprueft.data)
@@ -512,8 +513,8 @@ export async function loadCustomTitles(): Promise<WatchlistEntry[]> {
 export async function addCustomTitle(entry: WatchlistEntry): Promise<void> {
   const sql = getSql()
   await sql`
-    INSERT INTO custom_titel (ticker, name, venue, expected_coverage, cik)
-    VALUES (${entry.ticker}, ${entry.name}, ${entry.venue}, ${entry.expectedCoverage}, ${entry.cik ?? null})
+    INSERT INTO custom_titel (ticker, name, venue, expected_coverage, cik, isin)
+    VALUES (${entry.ticker}, ${entry.name}, ${entry.venue}, ${entry.expectedCoverage}, ${entry.cik ?? null}, ${entry.isin ?? null})
     ON CONFLICT (ticker) DO NOTHING
   `
 }

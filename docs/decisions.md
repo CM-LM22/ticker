@@ -663,3 +663,22 @@ Jahreszahlen mit Vorjahresvergleich aus amtlicher Quelle sind
 ehrlicher als geratene Quartale. Das grosse Fakten-JSON wird nur bei
 einer neueren Einreichung geladen; sonst kostet der taegliche
 Abgleich zwei kleine API-Aufrufe.
+
+## E33 Deutsche Titelsuche ueber Tradegate statt Alpha Vantage
+
+Die Suche nach deutschen Titeln laeuft jetzt automatisch ueber die
+Tradegate-Kurssuche: frei, ohne Schluessel, ohne Abruflimit — und sie
+liefert die ISIN, den Schluessel zu allem Weiteren. Ein so
+hinzugefuegter Titel bekommt Live-Kurse und den Tagesschluss ueber
+Tradegate selbst und den Jahresbericht ueber GLEIF und ESEF; Alpha
+Vantage braucht er nur noch optional fuer die 100-Tage-Historie und
+bleibt als beschrifteter Notbehelf-Knopf stehen.
+
+Erstbefuellung ohne Vergleichsbasis: Der 15-Prozent-Wachhund braucht
+einen gespeicherten Schluss, den ein frisch hinzugefuegter Titel noch
+nicht hat. Dokumentierte Ausnahme: ISIN und Name stammen aus der
+Tradegate-Suche selbst und der Nutzer hat den Namen beim Hinzufuegen
+bestaetigt — der erste Tagesschluss wird direkt uebernommen, danach
+gilt der Wachhund wieder. Die Kurssuche ist undokumentiertes HTML wie
+schon die Kursabfrage (E25): tolerant geparst, mit Messzeile im
+Protokoll und eigener Diagnose-Probe (Stichwort RTL).

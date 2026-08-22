@@ -154,6 +154,13 @@ export async function probeSources(): Promise<SourceProbe[]> {
           ok: false,
           detail: 'uebersprungen, ALPHA_VANTAGE_API_KEY nicht gesetzt',
         }),
+    pruefe('Tradegate-Suche', 'Stichwort "RTL"', async () => {
+      const { holeTradegateTreffer } = await import('../providers/tradegate-suche')
+      const treffer = await holeTradegateTreffer('RTL')
+      if (treffer.length === 0) throw new Error('keine Treffer — Seitenaufbau geaendert?')
+      const erster = treffer[0]
+      return `${treffer.length} Treffer, z. B. ${erster?.name ?? '?'} (${erster?.isin ?? '?'})`
+    }),
     alpha.length > 0
       ? pruefe('Alpha Vantage Suche', 'Stichwort "RTL"', async () => {
           const { symbolSearchUrl, parseSymbolSearch } = await import('../providers/alphavantage')

@@ -47,6 +47,8 @@ interface SucheTreffer {
   imBestand: boolean
   hinzufuegbar: boolean
   grund: string | null
+  markt?: 'us' | 'xetra' | 'tradegate'
+  isin?: string
 }
 
 interface SucheAntwort {
@@ -136,14 +138,18 @@ export function OverviewTable({
     }
   }
 
-  async function hinzufuegen(ticker: string, markt?: 'xetra'): Promise<void> {
+  async function hinzufuegen(treffer: Pick<SucheTreffer, 'ticker' | 'markt' | 'isin'>): Promise<void> {
+    const { ticker } = treffer
     setAddLaeuft(true)
     setAddStatus(`${ticker} wird hinzugefuegt …`)
     try {
+      const koerper: Record<string, string> = { ticker }
+      if (treffer.markt !== undefined && treffer.markt !== 'us') koerper['markt'] = treffer.markt
+      if (treffer.isin !== undefined) koerper['isin'] = treffer.isin
       const antwort = await fetch('/api/watchlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(markt === undefined ? { ticker } : { ticker, markt }),
+        body: JSON.stringify(koerper),
       })
       const daten = (await antwort.json()) as { ok: boolean; fehler?: string }
       if (!daten.ok) {
@@ -405,7 +411,7 @@ export function OverviewTable({
                     <button
                       type="button"
                       disabled={addLaeuft}
-                      onClick={() => void hinzufuegen(treffer.ticker)}
+                      onClick={() => void hinzufuegen(treffer)}
                     >
                       {t.hinzufuegen}
                     </button>
@@ -442,7 +448,7 @@ export function OverviewTable({
                         <button
                           type="button"
                           disabled={addLaeuft}
-                          onClick={() => void hinzufuegen(treffer.ticker, 'xetra')}
+                          onClick={() => void hinzufuegen({ ...treffer, markt: 'xetra' })}
                         >
                           {t.hinzufuegen}
                         </button>

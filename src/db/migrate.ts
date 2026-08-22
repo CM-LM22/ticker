@@ -111,6 +111,10 @@ export async function ensureSchema(): Promise<void> {
     )
   `
 
+  // ISIN spaeter dazugekommen: der Schluessel zu Tradegate-Kursen und
+  // ESEF-Jahresberichten fuer selbst hinzugefuegte deutsche Titel.
+  await sql`ALTER TABLE custom_titel ADD COLUMN IF NOT EXISTS isin char(12)`
+
   // Die erste Fassung erlaubte nur NASDAQ und NYSE; seit XETRA-Titel
   // hinzukommen, wird die Pruefung hier nachgezogen. Drop und Add sind
   // idempotent und billig, deshalb duerfen sie bei jedem Lauf laufen.

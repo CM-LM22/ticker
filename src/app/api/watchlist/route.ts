@@ -9,6 +9,7 @@ import { addCustomTitle, removeCustomTitle } from '@/db/repository'
 import { WatchlistEntrySchema } from '@/domain/instrument'
 import { holeXetraTreffer } from '@/providers/alphavantage-suche'
 import { ladeSucheIndex, venueForExchange } from '@/providers/sec-suche'
+import { holeTradegateTreffer } from '@/providers/tradegate-suche'
 
 /**
  * Titel zur Watchlist hinzufuegen und selbst hinzugefuegte wieder
@@ -19,7 +20,8 @@ export const dynamic = 'force-dynamic'
 
 const KoerperSchema = z.object({
   ticker: z.string().trim().min(1).max(12),
-  markt: z.enum(['us', 'xetra']).optional(),
+  markt: z.enum(['us', 'xetra', 'tradegate']).optional(),
+  isin: z.string().trim().length(12).optional(),
 })
 
 function fehler(status: number, text: string): NextResponse {
@@ -55,6 +57,32 @@ async function xetraHinzufuegen(ticker: string): Promise<NextResponse> {
   return NextResponse.json({ ok: true, ticker, name: eintrag.name, venue: 'XETRA' })
 }
 
+/**
+ * Tradegate-Zweig: Der Client schickt ISIN und Kuerzel; verifiziert
+ * wird gegen die Tradegate-Suche selbst — Name und WKN kommen aus der
+ * Quelle, nicht vom Client (E9). Die ISIN ist der Schluessel zu
+ * Live-Kursen, Tagesschluss und ESEF-Jahresbericht.
+ */
+async function tradegateHinzufuegen(ticker: string, isin: string): Promise<NextResponse> {
+  const treffer = await holeTradegateTreffer(isin)
+  const eintrag = treffer.find((kandidat) => kandidat.isin === isin)
+  if (eintrag === undefined) {
+    return fehler(404, `Tradegate kennt die ISIN ${isin} nicht.`)
+  }
+
+  const neu = WatchlistEntrySchema.parse({
+    ticker: eintrag.wkn ?? ticker,
+    name: eintrag.name,
+    venue: 'XETRA',
+    isin: eintrag.isin,
+    expectedCoverage: 'none',
+  })
+  await ensureSchema()
+  await addCustomTitle(neu)
+  console.info(`watchlist: ${neu.ticker} hinzugefuegt (Tradegate, ${eintrag.name}, ${isin})`)
+  return NextResponse.json({ ok: true, ticker: neu.ticker, name: eintrag.name, venue: 'XETRA' })
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!hasDatabase()) {
     return fehler(503, 'Keine Datenbank angebunden; eigene Titel brauchen eine.')
@@ -68,7 +96,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (bestand.some((entry) => entry.ticker === ticker)) {
     return fehler(409, `${ticker} ist schon in der Watchlist.`)
   }
+  if (koerper.data.isin !== undefined && bestand.some((entry) => entry.isin === koerper.data.isin)) {
+    return fehler(409, `Die ISIN ${koerper.data.isin} ist schon in der Watchlist.`)
+  }
 
+  if (koerper.data.markt === 'tradegate') {
+    if (koerper.data.isin === undefined) return fehler(400, 'Erwartet: { ticker, isin }')
+    return tradegateHinzufuegen(ticker, koerper.data.isin.toUpperCase())
+  }
   if (koerper.data.markt === 'xetra') return xetraHinzufuegen(ticker)
 
   const userAgent = process.env['SEC_USER_AGENT']?.trim() ?? ''
