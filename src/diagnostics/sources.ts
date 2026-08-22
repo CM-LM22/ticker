@@ -97,19 +97,35 @@ export async function probeSources(): Promise<SourceProbe[]> {
   ]
 
   if (twelve.length > 0) {
-    for (const [ziel, instrument] of [
-      ['AAPL (US)', { ticker: 'AAPL', venue: 'NASDAQ' as const }],
-      ['SAP (DE)', { ticker: 'SAP', venue: 'XETRA' as const }],
-    ] as const) {
-      proben.push(
-        pruefe('Twelve Data', ziel, async () =>
-          reihenBefund(
-            parseTwelveDataSeries(await json(twelveDataUrl(instrument, twelve, 30)), {
-              ticker: instrument.ticker,
-              currency: instrument.venue === 'XETRA' ? 'EUR' : 'USD',
-            }).bars,
-          ),
+    proben.push(
+      pruefe('Twelve Data', 'AAPL (US)', async () =>
+        reihenBefund(
+          parseTwelveDataSeries(
+            await json(twelveDataUrl({ ticker: 'AAPL', venue: 'NASDAQ' }, twelve, 30)),
+            { ticker: 'AAPL', currency: 'USD' },
+          ).bars,
         ),
+      ),
+    )
+
+    // Ein 404 auf SAP kann "kein XETRA im Gratis-Tarif" heissen oder
+    // schlicht ein falscher Parameter sein. Diese drei Varianten
+    // trennen das eine vom anderen, statt es zu vermuten.
+    const varianten: readonly [string, string][] = [
+      ['SAP, exchange=XETR', `symbol=SAP&exchange=XETR`],
+      ['SAP, exchange=XETRA', `symbol=SAP&exchange=XETRA`],
+      ['SAP, mic_code=XETR', `symbol=SAP&mic_code=XETR`],
+      ['SAP ohne Boerse (US-ADR)', `symbol=SAP`],
+    ]
+    for (const [ziel, abfrage] of varianten) {
+      proben.push(
+        pruefe('Twelve Data', ziel, async () => {
+          const daten = await json(
+            `https://api.twelvedata.com/time_series?${abfrage}&interval=1day&outputsize=5&apikey=${twelve}`,
+          )
+          const reihe = parseTwelveDataSeries(daten, { ticker: 'SAP', currency: 'EUR' })
+          return `${reihenBefund(reihe.bars)}, Waehrung ${reihe.currency}`
+        }),
       )
     }
   } else {
