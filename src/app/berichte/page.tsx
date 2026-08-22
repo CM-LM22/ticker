@@ -5,7 +5,7 @@ import { loadTitleData } from '@/data/load'
 import { GAP_LABEL, buildReportBriefs } from '@/domain/report-brief'
 import { formatCompact, formatDay, formatPercent } from '@/lib/format'
 
-export const dynamic = 'force-static'
+export const dynamic = 'force-dynamic'
 
 export default async function BerichtePage() {
   const data = await loadTitleData()

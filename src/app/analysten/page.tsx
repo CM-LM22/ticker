@@ -4,7 +4,12 @@ import { loadAnalystView } from '@/data/load'
 import { ANALYST_ACTION_LABEL } from '@/domain/analyst-actions'
 import { formatDay } from '@/lib/format'
 
-export const revalidate = 300
+// Bei jedem Aufruf live aus der Datenbank gerendert. Vorgebackene
+// Staende gab es hier frueher (revalidate 300); sie haben nach jedem
+// Deployment den eingebackenen Demodaten-Stand gezeigt, bis jede Seite
+// einzeln neu erzeugt war. Eine Datenbankabfrage je Aufruf ist fuer
+// ein privates Dashboard der ehrlichere Preis.
+export const dynamic = 'force-dynamic'
 
 /**
  * Analystenkonsens je Titel: wie viele Haeuser raten zu Kauf, Halten,

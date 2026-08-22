@@ -3,7 +3,7 @@ import { loadTitleData } from '@/data/load'
 import { buildReportBriefs } from '@/domain/report-brief'
 import { renderReportPdf } from '@/lib/report-pdf'
 
-export const dynamic = 'force-static'
+export const dynamic = 'force-dynamic'
 
 export async function GET(): Promise<NextResponse> {
   const data = await loadTitleData()

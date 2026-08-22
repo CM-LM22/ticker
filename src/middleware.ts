@@ -16,6 +16,20 @@ const OFFEN = new Set(['/login', '/api/login'])
 export async function middleware(request: NextRequest): Promise<NextResponse | Response> {
   const { pathname, search } = request.nextUrl
 
+  // Zuerst der Cron: er ruft die Adresse auf, die Vercel ihm gibt, und
+  // darf weder an der Umleitung noch am Passwort haengen bleiben. Er
+  // weist sich mit CRON_SECRET aus; ohne das Secret gibt es diesen Weg
+  // nicht.
+  const cronSecret = process.env['CRON_SECRET']?.trim()
+  if (
+    pathname === '/api/refresh' &&
+    cronSecret !== undefined &&
+    cronSecret.length > 0 &&
+    request.headers.get('authorization') === `Bearer ${cronSecret}`
+  ) {
+    return NextResponse.next()
+  }
+
   // Jede Vercel-Auslieferung ist ein eingefrorener Schnappschuss mit
   // eigener Adresse. Wer eine alte Deployment-URL aus dem Dashboard
   // oeffnet, sieht den damaligen Stand — inklusive Demodaten — ohne es
@@ -36,19 +50,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse | R
 
   if (OFFEN.has(pathname)) return NextResponse.next()
 
-  // Vercel Cron ruft ohne Browser und damit ohne Cookie auf. Es weist
-  // sich stattdessen mit CRON_SECRET aus. Ist das Secret nicht gesetzt,
-  // gibt es diesen Weg nicht: dann bleibt der Endpunkt hinter dem
-  // Passwort, statt offen zu stehen.
-  const cronSecret = process.env['CRON_SECRET']?.trim()
-  if (
-    pathname === '/api/refresh' &&
-    cronSecret !== undefined &&
-    cronSecret.length > 0 &&
-    request.headers.get('authorization') === `Bearer ${cronSecret}`
-  ) {
-    return NextResponse.next()
-  }
 
   const password = process.env['APP_PASSWORD']?.trim()
 

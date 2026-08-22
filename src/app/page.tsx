@@ -10,10 +10,12 @@ import { rank } from '@/domain/screening'
 import { buildChart } from '@/lib/chart'
 import { formatDay } from '@/lib/format'
 
-// Wird alle fuenf Minuten neu erzeugt und zusaetzlich sofort nach
-// einem erfolgreichen Abruf, siehe /api/refresh. Die Live-Kurse holt
-// die Tabelle selbst im Browser, dafuer muss die Seite nicht neu bauen.
-export const revalidate = 300
+// Bei jedem Aufruf live aus der Datenbank gerendert. Vorgebackene
+// Staende gab es hier frueher (revalidate 300); sie haben nach jedem
+// Deployment den eingebackenen Demodaten-Stand gezeigt, bis jede Seite
+// einzeln neu erzeugt war. Eine Datenbankabfrage je Aufruf ist fuer
+// ein privates Dashboard der ehrlichere Preis.
+export const dynamic = 'force-dynamic'
 
 /**
  * Verlaufslinie serverseitig vorrechnen: Der Pfad ist ein kurzer Text,

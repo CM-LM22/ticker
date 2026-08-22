@@ -79,12 +79,18 @@ function build(
  * entfallen, mit ihr der zweite Datenpfad.
  */
 export async function loadTitlesFromDatabase(): Promise<TitleData | null> {
-  if (!hasDatabase()) return null
+  if (!hasDatabase()) {
+    console.info('Keine Datenbankvariable gefunden, zeige Demodaten.')
+    return null
+  }
   try {
     const asOf = (await lastRefreshAt()) ?? new Date()
     const sinceDay = new Date(asOf.getTime() - 420 * 86_400_000).toISOString().slice(0, 10)
     const stored: Map<string, StoredTitle> = await loadStoredTitles(sinceDay)
-    if (stored.size === 0) return null
+    if (stored.size === 0) {
+      console.info('Datenbank erreichbar, aber leer, zeige Demodaten.')
+      return null
+    }
 
     return {
       titles: WATCHLIST.map((entry) => {
