@@ -70,7 +70,7 @@ export default async function Home() {
   const withoutPrices = titles.filter((title) => title.price === null).length
 
   return (
-    <main>
+    <main className="uebersicht">
       <h1>Ticker</h1>
       <p className="lede">
         {titles.length} beobachtete Titel, sortiert nach der Kennzahlen-Punktzahl. Bei{' '}
@@ -94,23 +94,26 @@ export default async function Home() {
         fundamentalsSource={fundamentalsSource}
       />
 
-      <OverviewTable rows={rows} asOfText={`Stand ${formatDay(asOf.toISOString().slice(0, 10))}`} />
+      {/* Alles ab hier lebt im Scrollbereich der Tabelle: die Seite
+          selbst scrollt nicht, damit Werkzeugleiste, Spaltenkoepfe und
+          Titelspalte beim Blaettern stehen bleiben. */}
+      <OverviewTable rows={rows} asOfText={`Stand ${formatDay(asOf.toISOString().slice(0, 10))}`}>
+        <p className="muted footnote">
+          Die Spalte <em>Punkte</em> nennt hinter dem Punkt den Anteil der Signale, fuer die Daten
+          vorlagen. Ein Titel mit 70 · 44&nbsp;% ist auf duennerer Grundlage bewertet als einer mit
+          60 · 100&nbsp;%. Die Punktzahl ist eine Rangfolge nach offengelegten Kriterien, keine
+          Empfehlung; die Gewichte stehen auf jeder Detailseite. <em>heute</em> zeigt die
+          Veraenderung seit dem Vortagesschluss, sobald Live-Kurse verfuegbar sind.
+        </p>
 
-      <p className="muted footnote">
-        Die Spalte <em>Punkte</em> nennt hinter dem Punkt den Anteil der Signale, fuer die Daten
-        vorlagen. Ein Titel mit 70 · 44&nbsp;% ist auf duennerer Grundlage bewertet als einer mit
-        60 · 100&nbsp;%. Die Punktzahl ist eine Rangfolge nach offengelegten Kriterien, keine
-        Empfehlung; die Gewichte stehen auf jeder Detailseite. <em>heute</em> zeigt die
-        Veraenderung seit dem Vortagesschluss, sobald Live-Kurse verfuegbar sind.
-      </p>
+        <RefreshButton />
 
-      <RefreshButton />
+        <form method="post" action="/api/logout" className="logout">
+          <button type="submit">Abmelden</button>
+        </form>
 
-      <form method="post" action="/api/logout" className="logout">
-        <button type="submit">Abmelden</button>
-      </form>
-
-      <Disclaimer />
+        <Disclaimer />
+      </OverviewTable>
     </main>
   )
 }

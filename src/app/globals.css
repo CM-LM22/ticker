@@ -302,6 +302,20 @@ table.overview td {
   }
 }
 
+/* iPhone-Breite: die haftende Titelspalte noch schmaler, sonst bleibt
+   zu wenig Platz fuer die Werte daneben. */
+@media (max-width: 30rem) {
+  table.overview th:first-child,
+  table.overview td:first-child {
+    max-width: 5.5rem;
+    padding-right: 0.4rem;
+  }
+
+  table.overview td:first-child .muted {
+    max-width: 5rem;
+  }
+}
+
 td.num,
 th.num,
 .figures dd {
@@ -469,12 +483,58 @@ table.brief {
   padding: 0.6rem 0;
 }
 
-/* Breite Tabellen scrollen im eigenen Container statt mit der Seite;
-   die Titelspalte haftet dabei links, damit beim seitlichen Scrollen
-   sichtbar bleibt, zu welchem Titel eine Zeile gehoert. */
+/* Breite Tabellen scrollen im eigenen Container statt mit der Seite:
+   die Titelspalte haftet links, die Spaltenkoepfe haften oben — nur in
+   einem eigenen Scrollbereich koennen beide gleichzeitig haften. Die
+   Hoehe ist auf den Sichtbereich unter der Werkzeugleiste begrenzt. */
 .table-scroll {
-  overflow-x: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Die Uebersicht als feste Schale: die Seite selbst scrollt nicht,
+   Kopfbereich und Werkzeugleiste stehen, und ein einziger
+   Scrollbereich traegt Tabelle samt allem darunter. Nur so koennen
+   Spaltenkoepfe und Titelspalte gleichzeitig und dauerhaft haften. */
+main.uebersicht {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0.75rem;
+}
+
+main.uebersicht .table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Fussnote, Knoepfe und Panel unter der Tabelle sollen beim
+   seitlichen Scrollen nicht mitwandern: links haften und auf die
+   Sichtbreite begrenzen. */
+main.uebersicht .table-scroll > :not(table) {
+  position: sticky;
+  left: 0;
+  box-sizing: border-box;
+  max-width: calc(100vw - 2.5rem);
+}
+
+@media (max-width: 42rem) {
+  /* Auf kleinen Schirmen frisst der feste Kopfbereich sonst zu viel
+     Hoehe. */
+  main.uebersicht {
+    padding-top: 1rem;
+  }
+
+  main.uebersicht h1 {
+    font-size: 1.25rem;
+  }
+
+  main.uebersicht .lede,
+  main.uebersicht .actions {
+    margin: 0.3rem 0;
+    font-size: 0.8rem;
+  }
 }
 
 .table-scroll table th:first-child,
@@ -484,6 +544,22 @@ table.brief {
   z-index: 2;
   background: var(--bg);
   border-right: 1px solid var(--line);
+}
+
+.table-scroll table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  /* border-collapse laesst Raender an haftenden Zellen zurueck;
+     die Trennlinie kommt deshalb als Schatten mit. */
+  box-shadow: 0 1px 0 var(--line);
+}
+
+/* Die Ecke haftet in beide Richtungen und liegt zuoberst. */
+.table-scroll table thead th:first-child {
+  left: 0;
+  z-index: 4;
 }
 
 .toolbar input[type='search'] {

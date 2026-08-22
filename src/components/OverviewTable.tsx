@@ -62,7 +62,15 @@ interface SucheAntwort {
  * nichts Neueres bringen, nur Last erzeugen. Ohne Schluessel bleiben
  * die gespeicherten Schlusskurse stehen und der Grund wird angezeigt.
  */
-export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asOfText: string }) {
+export function OverviewTable({
+  rows,
+  asOfText,
+  children,
+}: {
+  rows: UebersichtZeile[]
+  asOfText: string
+  children?: React.ReactNode
+}) {
   const router = useRouter()
   const [filter, setFilter] = useState('')
   const [tab, setTab] = useState<(typeof TABS)[number][0]>('alle')
@@ -325,7 +333,6 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
           })}
         </tbody>
       </table>
-      </div>
 
       {sichtbar.length === 0 && (
         <p className="muted">Kein Titel passt zu dieser Suche.</p>
@@ -406,6 +413,9 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
           </div>
         </section>
       )}
+
+      {children}
+      </div>
     </>
   )
 }
