@@ -546,3 +546,36 @@ Sekunden und keinerlei Kontingent. Der Anlass war konkret: zwei
 parallel gedrueckte Browser-Laeufe hatten das Alpha-Vantage-Tageslimit
 verbraucht, bevor die 16 DAX-Titel ohne US-Notierung durch waren, und
 der naechste Lauf haette bis 06:20 auf sich warten lassen.
+
+## E27 Alpha Vantage nur noch mit outputsize=compact
+
+Der Gratis-Tarif von Alpha Vantage lehnt outputsize=full fuer
+TIME_SERIES_DAILY inzwischen als Premium-Funktion ab — als HTTP 200
+mit Hinweistext, in den Vercel-Logs vom 22.08.2026 gemessen. Genau
+daran scheiterte jeder Erstabruf der 16 DAX-Titel ohne US-Notierung:
+die Logik "erster Abruf = volle Historie" lief immer in die Ablehnung.
+
+Beschluss: immer compact (die letzten 100 Handelstage). Das reicht
+fuer Verlauf, Frische und alle Renditen bis drei Monate; die
+52-Wochen-Spanne dieser Titel waechst mit jedem Cron-Lauf um einen Tag
+nach, bis sie nach gut einem Jahr vollstaendig ist. Eine ehrlich
+unvollstaendige Spanne ist besser als gar keine Kurse.
+
+## E28 Ein-Seiten-Bericht je Titel als PDF
+
+Je Titel gibt es unter /titel/[ticker]/bericht.pdf eine einzelne
+A4-Seite: Kurs und 52-Wochen-Verlauf, die letzten vier Quartale und
+das juengste Geschaeftsjahr im Vorjahresvergleich, der
+Analystenkonsens mit Vormonatsbewegung, die regelbasierte Einstufung
+(stark/solide/neutral/schwach/kritisch aus der Screening-Punktzahl,
+mit Staerken, Schwaechen und Datenbasis) und ein datenbasierter
+Ausblick (Richtung von Umsatz und Marge, Konsensverschiebung,
+geschaetzter naechster Termin). Der Link zum Originalbericht bei der
+SEC steht dabei; was fehlt, steht unter "Bekannte Luecken" auf der
+Seite statt stillschweigend zu fehlen.
+
+Bewusst kein erzeugter Prosatext: Der Ausblick nennt nur, was aus den
+gespeicherten Zahlen ableitbar ist. Was das Management schreibt, steht
+im verlinkten Original — Prosa erfinden wir nicht. Die Einstufung ist
+ausdruecklich keine Anlageberatung; der Massstab (Schwellen 75/60/45/
+30, Gewichte der Signale) liegt offen im Code und auf der Seite.
