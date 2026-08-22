@@ -70,41 +70,14 @@ const ABSCHNITT_ENDE =
   /item\s*(7a|3|4)\s*[.:—-]|quantitative\s+and\s+qualitative\s+disclosures/i
 
 /**
- * Die ersten Absaetze des MD&A, woertlich. Die zweite Fundstelle wird
- * bevorzugt, weil die erste meist der Eintrag im Inhaltsverzeichnis
- * ist. Null, wenn der Abschnitt nicht auffindbar ist — das ist ein
- * Befund, kein Fehler (6-K und 20-F haben oft keinen solchen Titel).
+ * Juristischer Standard-Vorspann, der in jedem Bericht praktisch
+ * gleich lautet und nichts ueber das Geschaeft sagt. Absaetze mit
+ * diesen Markern fliegen aus dem Zitat.
  */
-export function extrahiereMdna(text: string, maxZeichen = 1400): string | null {
-  const treffer = [...text.matchAll(new RegExp(MDNA_START.source, 'gi'))]
-  if (treffer.length === 0) return null
-  // Letzte Fundstelle: nach Inhaltsverzeichnis und Kolumnentiteln.
-  const start = treffer[treffer.length - 1]?.index
-  if (start === undefined) return null
+export const BOILERPLATE =
+  /forward[- ]looking|safe harbor|undue reliance|risks?\s+and\s+uncertaint|zukunftsgerichtete?n?\s+aussagen|prognosen?\s+beruhen\s+auf\s+annahmen/i
 
-  let ausschnitt = text.slice(start, start + 60_000)
-  const ende = ausschnitt.search(ABSCHNITT_ENDE)
-  if (ende > 200) ausschnitt = ausschnitt.slice(0, ende)
-
-  // Ueberschriftszeile und Standard-Vorspann abwerfen, Absaetze sammeln.
-  const zeilen = ausschnitt
-    .split('\n')
-    .map((zeile) => zeile.trim())
-    .filter((zeile) => zeile.length > 0)
-    .slice(1)
-
-  const absaetze: string[] = []
-  let gesamt = 0
-  for (const zeile of zeilen) {
-    // Zwischentitel und Tabellenreste (kurz, ohne Satzzeichen) lohnen
-    // im Zitat nicht.
-    if (zeile.length < 60 && !/[.]$/.test(zeile)) continue
-    absaetze.push(zeile)
-    gesamt += zeile.length
-    if (gesamt >= maxZeichen) break
-  }
-  if (absaetze.length === 0) return null
-
+function kappen(absaetze: readonly string[], maxZeichen: number): string {
   let ergebnis = absaetze.join('\n\n')
   if (ergebnis.length > maxZeichen) {
     const gekappt = ergebnis.slice(0, maxZeichen)
@@ -114,11 +87,111 @@ export function extrahiereMdna(text: string, maxZeichen = 1400): string | null {
   return ergebnis
 }
 
-/** Auszug einer Einreichung holen: index.json, Hauptdokument, MD&A. */
+/**
+ * Absaetze nach einer Ueberschrift einsammeln. Eine Fundstelle zaehlt
+ * nur, wenn ihr ein substanzieller Absatz folgt — so fallen
+ * Inhaltsverzeichnis-Eintraege und Kolumnentitel durch, und die Suche
+ * geht zur naechsten Fundstelle weiter. Boilerplate-Absaetze werden
+ * uebersprungen.
+ */
+export function extrahiereNachUeberschrift(
+  text: string,
+  ueberschrift: RegExp,
+  optionen: { maxZeichen?: number; abschnittEnde?: RegExp } = {},
+): string | null {
+  const maxZeichen = optionen.maxZeichen ?? 1400
+  const treffer = [...text.matchAll(new RegExp(ueberschrift.source, 'gi'))]
+  for (const fund of treffer) {
+    const start = fund.index
+    if (start === undefined) continue
+    let ausschnitt = text.slice(start, start + 60_000)
+    if (optionen.abschnittEnde !== undefined) {
+      const ende = ausschnitt.search(optionen.abschnittEnde)
+      if (ende > 200) ausschnitt = ausschnitt.slice(0, ende)
+    }
+
+    const zeilen = ausschnitt
+      .split('\n')
+      .map((zeile) => zeile.trim())
+      .filter((zeile) => zeile.length > 0)
+      .slice(1)
+
+    const absaetze: string[] = []
+    let gesamt = 0
+    for (const zeile of zeilen) {
+      // Zwischentitel und Tabellenreste (kurz, ohne Satzzeichen)
+      // lohnen im Zitat nicht.
+      if (zeile.length < 60 && !/[.]$/.test(zeile)) {
+        if (absaetze.length > 0) break
+        continue
+      }
+      if (BOILERPLATE.test(zeile)) continue
+      absaetze.push(zeile)
+      gesamt += zeile.length
+      if (gesamt >= maxZeichen) break
+    }
+    // Der erste Absatz muss Substanz haben, sonst war die Fundstelle
+    // ein Verzeichniseintrag.
+    if (absaetze.length === 0 || (absaetze[0]?.length ?? 0) < 120) continue
+    return kappen(absaetze, maxZeichen)
+  }
+  return null
+}
+
+/**
+ * Die ersten substanziellen Absaetze des MD&A, woertlich und ohne den
+ * juristischen Standard-Vorspann. Null, wenn der Abschnitt nicht
+ * auffindbar ist — das ist ein Befund, kein Fehler (6-K und 20-F
+ * haben oft keinen solchen Titel).
+ */
+export function extrahiereMdna(text: string, maxZeichen = 1400): string | null {
+  return extrahiereNachUeberschrift(text, MDNA_START, {
+    maxZeichen,
+    abschnittEnde: ABSCHNITT_ENDE,
+  })
+}
+
+const GUIDANCE_START =
+  /(?:business\s+|financial\s+|full[- ]year\s+|fiscal\s+(?:year\s+)?\d{4}\s+)?(?:outlook|guidance)\b/i
+
+/**
+ * Die Prognose des Managements (Outlook/Guidance), woertlich. Die
+ * Ueberschrift muss eine eigene kurze Zeile sein, sonst faengt man
+ * jeden Satz, der das Wort "outlook" enthaelt.
+ */
+export function extrahiereGuidance(text: string, maxZeichen = 900): string | null {
+  const zeilen = text.split('\n')
+  for (let index = 0; index < zeilen.length; index += 1) {
+    const zeile = zeilen[index]?.trim() ?? ''
+    if (zeile.length === 0 || zeile.length > 80) continue
+    if (!GUIDANCE_START.test(zeile)) continue
+
+    const absaetze: string[] = []
+    let gesamt = 0
+    for (let weiter = index + 1; weiter < zeilen.length; weiter += 1) {
+      const kandidat = zeilen[weiter]?.trim() ?? ''
+      if (kandidat.length === 0) continue
+      if (kandidat.length < 60 && !/[.]$/.test(kandidat)) {
+        if (absaetze.length > 0) break
+        continue
+      }
+      if (BOILERPLATE.test(kandidat)) continue
+      absaetze.push(kandidat)
+      gesamt += kandidat.length
+      if (gesamt >= maxZeichen) break
+    }
+    if (absaetze.length === 0 || (absaetze[0]?.length ?? 0) < 120) continue
+    return kappen(absaetze, maxZeichen)
+  }
+  return null
+}
+
+/** Auszug einer Einreichung: index.json, Hauptdokument, MD&A samt
+ * Guidance aus demselben Text. */
 export async function holeMdnaAuszug(
   ordnerUrl: string,
   userAgent: string,
-): Promise<{ auszug: string; dokumentUrl: string } | null> {
+): Promise<{ auszug: string; guidance: string | null; dokumentUrl: string } | null> {
   const headers = { 'User-Agent': userAgent, Accept: 'application/json' }
   const indexAntwort = await fetch(`${ordnerUrl}index.json`, { headers })
   if (!indexAntwort.ok) throw new Error(`index.json: HTTP ${indexAntwort.status}`)
@@ -132,7 +205,8 @@ export async function holeMdnaAuszug(
   const html = await dokAntwort.text()
   // 10-K-Dokumente koennen zweistellige Megabyte haben; fuer den
   // MD&A-Anfang reicht der vordere Teil sicher aus.
-  const auszug = extrahiereMdna(htmlZuText(html.slice(0, 8_000_000)))
+  const text = htmlZuText(html.slice(0, 8_000_000))
+  const auszug = extrahiereMdna(text)
   if (auszug === null) return null
-  return { auszug, dokumentUrl: dokument.url }
+  return { auszug, guidance: extrahiereGuidance(text), dokumentUrl: dokument.url }
 }

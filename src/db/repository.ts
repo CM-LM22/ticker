@@ -535,6 +535,8 @@ export interface BerichtAuszug {
   ticker: string
   periodEnd: string
   auszug: string
+  /** Prognose des Managements. Null: nie gesucht. Leer: keiner da. */
+  guidance: string | null
   dokumentUrl: string
   fetchedAt: Date
 }
@@ -543,7 +545,7 @@ export interface BerichtAuszug {
 export async function readBerichtAuszug(ticker: string): Promise<BerichtAuszug | null> {
   const sql = getSql()
   const rows = (await sql`
-    SELECT ticker, period_end::text AS period_end, auszug, dokument_url, fetched_at
+    SELECT ticker, period_end::text AS period_end, auszug, guidance, dokument_url, fetched_at
     FROM bericht_auszug
     WHERE ticker = ${ticker}
   `) as Record<string, unknown>[]
@@ -553,6 +555,7 @@ export async function readBerichtAuszug(ticker: string): Promise<BerichtAuszug |
     ticker: String(row['ticker']),
     periodEnd: String(row['period_end']).slice(0, 10),
     auszug: String(row['auszug']),
+    guidance: row['guidance'] == null ? null : String(row['guidance']),
     dokumentUrl: String(row['dokument_url']),
     fetchedAt: row['fetched_at'] instanceof Date ? row['fetched_at'] : new Date(String(row['fetched_at'])),
   }
@@ -562,18 +565,46 @@ export async function saveBerichtAuszug(eintrag: {
   ticker: string
   periodEnd: string
   auszug: string
+  guidance: string | null
   dokumentUrl: string
 }): Promise<void> {
   const sql = getSql()
   await sql`
-    INSERT INTO bericht_auszug (ticker, period_end, auszug, dokument_url, fetched_at)
-    VALUES (${eintrag.ticker}, ${eintrag.periodEnd}, ${eintrag.auszug}, ${eintrag.dokumentUrl}, now())
+    INSERT INTO bericht_auszug (ticker, period_end, auszug, guidance, dokument_url, fetched_at)
+    VALUES (${eintrag.ticker}, ${eintrag.periodEnd}, ${eintrag.auszug}, ${eintrag.guidance}, ${eintrag.dokumentUrl}, now())
     ON CONFLICT (ticker) DO UPDATE SET
       period_end = EXCLUDED.period_end,
       auszug = EXCLUDED.auszug,
+      guidance = EXCLUDED.guidance,
       dokument_url = EXCLUDED.dokument_url,
       fetched_at = EXCLUDED.fetched_at
   `
+}
+
+/** Juengste Konsens-Bewegungen eines Titels, fuer den Ein-Seiten-Bericht. */
+export async function loadActionsForTicker(
+  ticker: string,
+  limit = 3,
+): Promise<StoredAnalystAction[]> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT source_event_id, ticker, firm, action, grade_from, grade_to,
+           occurred_at, ingested_at, notified
+    FROM analyst_action
+    WHERE ticker = ${ticker}
+    ORDER BY occurred_at DESC
+    LIMIT ${limit}
+  `) as Record<string, unknown>[]
+  return rows.map((row) => ({
+    sourceEventId: String(row['source_event_id']),
+    ticker: String(row['ticker']),
+    firm: String(row['firm']),
+    action: String(row['action']) as StoredAnalystAction['action'],
+    gradeFrom: row['grade_from'] == null ? null : String(row['grade_from']),
+    gradeTo: row['grade_to'] == null ? null : String(row['grade_to']),
+    occurredAt: row['occurred_at'] instanceof Date ? row['occurred_at'] : new Date(String(row['occurred_at'])),
+    ingestedAt: row['ingested_at'] instanceof Date ? row['ingested_at'] : new Date(String(row['ingested_at'])),
+  }))
 }
 
 /** Juengste berichtete Periode mit Quell-URL, fuer den MD&A-Auszug. */

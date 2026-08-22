@@ -11,14 +11,27 @@ import type { PdfRect, PdfStroke, PdfText } from './pdf'
  * Reines Rendering; alle Inhalte kommen fertig aus buildStockBrief.
  */
 
+export interface KonsensBewegung {
+  occurredAt: Date
+  action: string
+  gradeTo: string | null
+}
+
 export interface StockPdfInput {
   brief: StockBrief
   /** 52-Wochen-Fenster, aufsteigend nach Datum. Leer, wenn keine Kurse. */
   bars: readonly PriceBar[]
   asOf: Date
   isDemo: boolean
-  /** Woertlicher MD&A-Auszug aus dem juengsten Bericht, falls geholt. */
-  auszug: { text: string; dokumentUrl: string; periodEnd: string } | null
+  /** Woertliche Auszuege aus dem juengsten Bericht, falls geholt. */
+  auszug: {
+    text: string
+    guidance: string | null
+    dokumentUrl: string
+    periodEnd: string
+  } | null
+  /** Juengste Konsens-Bewegungen, neueste zuerst. */
+  aktionen: readonly KonsensBewegung[]
 }
 
 /** Zeilenumbruch nach gemessener Breite, fuer den Zitatblock. */
@@ -307,8 +320,65 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
     y = chart.y - 22
   }
 
-  // Analystenkonsens.
-  texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Analystenkonsens' })
+  // Woertliche Zitatbloecke mit Zeilenbudget.
+  const zitatBlock = (titel: string, text: string, maxZeilen: number): void => {
+    texts.push({ x: LINKS, y, size: 10, font: 'bold', text: titel })
+    y -= 12
+    const zitatZeilen = zeilenUmbruch(text, 7.5, RECHTS - LINKS)
+    let gezeigt = 0
+    for (const zeile of zitatZeilen) {
+      if (gezeigt >= maxZeilen || y < 70) {
+        texts.push({
+          x: LINKS,
+          y,
+          size: 7.5,
+          font: 'regular',
+          text: '… (gekuerzt, weiter im Original)',
+        })
+        y -= 10
+        break
+      }
+      texts.push({ x: LINKS, y, size: 7.5, font: 'regular', text: zeile })
+      y -= zeile.length === 0 ? 5 : 9.5
+      gezeigt += 1
+    }
+    y -= 6
+  }
+
+  // Die Geschichte hinter den Zahlen, wie das Management sie selbst
+  // erzaehlt — woertlich, ohne den juristischen Standard-Vorspann.
+  if (input.auszug !== null) {
+    zitatBlock('Geschaeftsentwicklung — woertlich aus dem Bericht', input.auszug.text, 14)
+    if (input.auszug.guidance !== null && input.auszug.guidance.length > 0) {
+      zitatBlock('Prognose des Managements — woertlich', input.auszug.guidance, 9)
+    } else {
+      texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Prognose des Managements' })
+      y -= 11
+      texts.push({
+        x: LINKS,
+        y,
+        size: 7.5,
+        font: 'regular',
+        text: 'Kein eigener Prognose-Abschnitt im Bericht gefunden; siehe Originaldokument.',
+      })
+      y -= 14
+    }
+    texts.push({
+      x: LINKS,
+      y,
+      size: 6.5,
+      font: 'regular',
+      text: truncateToWidth(
+        `Woertliche Auszuege aus ${input.auszug.dokumentUrl}, automatisch ausgeschnitten — keine Zusammenfassung.`,
+        6.5,
+        RECHTS - LINKS,
+      ),
+    })
+    y -= 16
+  }
+
+  // Analystenmeinungen: Konsens, Mehrheitslesart, juengste Bewegungen.
+  texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Analystenmeinungen' })
   y -= 13
   if (brief.konsens === null) {
     texts.push({ x: LINKS, y, size: 8, font: 'regular', text: 'Kein Analystenkonsens verfuegbar.' })
@@ -327,7 +397,37 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
       font: 'regular',
       text: `${brief.konsens.kauf} Kauf · ${brief.konsens.halten} Halten · ${brief.konsens.verkauf} Verkauf (Monat ${brief.konsens.period}, ${delta}).`,
     })
-    y -= 12
+    y -= 11
+    const gesamt = brief.konsens.kauf + brief.konsens.halten + brief.konsens.verkauf
+    const lesart =
+      brief.konsens.kauf > brief.konsens.halten + brief.konsens.verkauf
+        ? `Die Mehrheit der ${gesamt} erfassten Analysten stuft den Titel als Kauf ein.`
+        : brief.konsens.verkauf > brief.konsens.kauf
+          ? `Unter den ${gesamt} erfassten Analysten ueberwiegen die Verkaufsstimmen.`
+          : `Kein klares Mehrheitsbild unter den ${gesamt} erfassten Analysten.`
+    texts.push({ x: LINKS, y, size: 8, font: 'regular', text: lesart })
+    y -= 11
+  }
+  for (const bewegung of input.aktionen.slice(0, 3)) {
+    const monat = `${String(bewegung.occurredAt.getUTCMonth() + 1).padStart(2, '0')}/${bewegung.occurredAt.getUTCFullYear()}`
+    const wortB =
+      bewegung.action === 'upgrade'
+        ? 'Konsens verschiebt sich Richtung Kauf'
+        : bewegung.action === 'downgrade'
+          ? 'Konsens verschiebt sich weg vom Kauf'
+          : 'Konsens-Verteilung veraendert'
+    texts.push({
+      x: LINKS,
+      y,
+      size: 7.5,
+      font: 'regular',
+      text: truncateToWidth(
+        `· ${monat}: ${wortB}${bewegung.gradeTo === null ? '' : ` (neu: ${bewegung.gradeTo})`}`,
+        7.5,
+        RECHTS - LINKS,
+      ),
+    })
+    y -= 10
   }
   y -= 8
 
@@ -370,8 +470,9 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
   const rechtsEnde = spaltig('Schwaechen', brief.schwaechen, LINKS + spaltenBreite + 20, spaltenBreite)
   y = Math.min(linksEnde, rechtsEnde) - 10
 
-  // Ausblick.
-  texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Unternehmensausblick (datenbasiert)' })
+  // Trendlesart aus den gespeicherten Daten — bewusst getrennt von der
+  // woertlichen Management-Prognose weiter oben.
+  texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Trend aus den Daten' })
   y -= 13
   for (const satz of brief.ausblick) {
     texts.push({ x: LINKS, y, size: 8, font: 'regular', text: truncateToWidth(`· ${satz}`, 8, RECHTS - LINKS) })
@@ -388,36 +489,6 @@ export function renderStockPdf(input: StockPdfInput): Uint8Array {
     y -= 11
   }
   y -= 6
-
-  // Woertliches Zitat aus dem Lagebericht — die Geschichte hinter den
-  // Zahlen, wie das Management sie selbst erzaehlt. Keine
-  // Zusammenfassung, kein erzeugter Text; gekuerzt und verlinkt.
-  if (input.auszug !== null && y > 120) {
-    texts.push({ x: LINKS, y, size: 10, font: 'bold', text: 'Aus dem Bericht — woertlich (MD&A)' })
-    y -= 12
-    const zeilen = zeilenUmbruch(input.auszug.text, 7.5, RECHTS - LINKS)
-    for (const zeile of zeilen) {
-      if (y < 78) {
-        texts.push({ x: LINKS, y, size: 7.5, font: 'regular', text: '… (gekuerzt, weiter im Original)' })
-        y -= 10
-        break
-      }
-      texts.push({ x: LINKS, y, size: 7.5, font: 'regular', text: zeile })
-      y -= zeile.length === 0 ? 5 : 9.5
-    }
-    texts.push({
-      x: LINKS,
-      y,
-      size: 6.5,
-      font: 'regular',
-      text: truncateToWidth(
-        `Woertlicher Auszug aus dem Originaldokument (${input.auszug.dokumentUrl}), automatisch ausgeschnitten.`,
-        6.5,
-        RECHTS - LINKS,
-      ),
-    })
-    y -= 14
-  }
 
   // Bekannte Luecken, damit die Seite nicht mehr verspricht, als da ist.
   if (brief.luecken.length > 0) {

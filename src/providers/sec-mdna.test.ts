@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extrahiereMdna, findePrimaerdokument, htmlZuText } from './sec-mdna'
+import { extrahiereGuidance, extrahiereMdna, findePrimaerdokument, htmlZuText } from './sec-mdna'
 
 describe('findePrimaerdokument', () => {
   it('nimmt die groesste HTML-Datei ohne Index und Anhaenge', () => {
@@ -74,5 +74,38 @@ describe('extrahiereMdna', () => {
 
   it('liefert null, wenn es keinen MD&A-Abschnitt gibt', () => {
     expect(extrahiereMdna('Ein 6-K ohne einschlaegige Ueberschrift.')).toBeNull()
+  })
+})
+
+describe('BOILERPLATE und extrahiereGuidance', () => {
+  it('wirft den juristischen Vorspann aus dem MD&A-Zitat', () => {
+    const substanz =
+      'Total net sales increased 6% during the third quarter of 2026 compared to the same quarter of 2025, driven primarily by higher net sales of services and a favorable product mix across all geographic segments of the business. '
+    const text = [
+      "Management's Discussion and Analysis of Financial Condition and Results of Operations",
+      'This report contains forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results could differ materially from expectations due to risks and uncertainties described elsewhere.',
+      substanz + substanz,
+    ].join('\n')
+    const auszug = extrahiereMdna(text)
+    expect(auszug).not.toBeNull()
+    expect(auszug).not.toContain('forward-looking')
+    expect(auszug).toContain('Total net sales increased')
+  })
+
+  it('findet die Guidance unter einer eigenen Ueberschrift', () => {
+    const prognose =
+      'For the full fiscal year 2026 the Company expects revenue growth in the range of 5% to 7% and an operating margin of approximately 30%, assuming foreign exchange rates remain at current levels for the remainder of the year. '
+    const text = ['Some earlier content that goes on.', 'Fiscal 2026 Outlook', prognose + prognose].join(
+      '\n',
+    )
+    const guidance = extrahiereGuidance(text)
+    expect(guidance).not.toBeNull()
+    expect(guidance).toContain('expects revenue growth')
+  })
+
+  it('faengt nicht jeden Satz mit dem Wort outlook', () => {
+    const text =
+      'The macroeconomic outlook remains uncertain according to management, and there is no separate section here that would qualify as guidance for the year.'
+    expect(extrahiereGuidance(text)).toBeNull()
   })
 })

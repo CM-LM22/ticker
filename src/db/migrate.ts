@@ -135,6 +135,11 @@ export async function ensureSchema(): Promise<void> {
     )
   `
 
+  // Prognose des Managements, spaeter dazugekommen. NULL heisst "noch
+  // nie gesucht", leer heisst "gesucht, Bericht hat keinen solchen
+  // Abschnitt" — der Unterschied steuert, ob erneut geholt wird.
+  await sql`ALTER TABLE bericht_auszug ADD COLUMN IF NOT EXISTS guidance text`
+
   // Analystenkonsens als Monatsstand je Titel. Die Veraenderung
   // zwischen zwei Staenden wird als Meldung in analyst_action gelegt;
   // diese Tabelle haelt nur den Verlauf fuer die Anzeige.

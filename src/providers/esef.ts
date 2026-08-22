@@ -247,13 +247,56 @@ export async function holeEsefPerioden(filing: EsefFiling): Promise<ReportedPeri
   })
 }
 
-/** Lagebericht-Auszug aus dem Berichtsdokument, groessenbegrenzt. */
+const PROGNOSE_START = /^(prognosebericht|prognose(n)?\b|ausblick\b|erwartete\s+entwicklung)/i
+
+/**
+ * Die Prognose des Managements aus einem deutschen Jahresbericht
+ * (Prognosebericht/Ausblick), woertlich. Ueberschrift als eigene
+ * kurze Zeile, danach substanzielle Absaetze.
+ */
+export function extrahiereProgose(text: string, maxZeichen = 900): string | null {
+  const zeilen = text.split('\n')
+  for (let index = 0; index < zeilen.length; index += 1) {
+    const zeile = zeilen[index]?.trim() ?? ''
+    if (zeile.length === 0 || zeile.length > 60) continue
+    if (!PROGNOSE_START.test(zeile)) continue
+
+    const absaetze: string[] = []
+    let gesamt = 0
+    for (let weiter = index + 1; weiter < zeilen.length; weiter += 1) {
+      const kandidat = zeilen[weiter]?.trim() ?? ''
+      if (kandidat.length === 0) continue
+      if (kandidat.length < 60 && !/[.]$/.test(kandidat)) {
+        if (absaetze.length > 0) break
+        continue
+      }
+      absaetze.push(kandidat)
+      gesamt += kandidat.length
+      if (gesamt >= maxZeichen) break
+    }
+    if (absaetze.length === 0 || (absaetze[0]?.length ?? 0) < 120) continue
+
+    let ergebnis = absaetze.join('\n\n')
+    if (ergebnis.length > maxZeichen) {
+      const gekappt = ergebnis.slice(0, maxZeichen)
+      const letzterPunkt = gekappt.lastIndexOf('.')
+      ergebnis = letzterPunkt > maxZeichen / 2 ? gekappt.slice(0, letzterPunkt + 1) : `${gekappt} …`
+    }
+    return ergebnis
+  }
+  return null
+}
+
+/** Lagebericht- und Prognose-Auszug aus dem Berichtsdokument. */
 export async function holeEsefAuszug(
   reportUrl: string,
   maxBytes = 15_000_000,
-): Promise<string | null> {
+): Promise<{ auszug: string; guidance: string | null } | null> {
   const antwort = await fetch(reportUrl, { headers: { Accept: 'text/html,application/xhtml+xml' } })
   if (!antwort.ok) throw new Error(`Berichtsdokument: HTTP ${antwort.status}`)
   const html = await antwort.text()
-  return extrahiereLagebericht(htmlZuText(html.slice(0, maxBytes)))
+  const text = htmlZuText(html.slice(0, maxBytes))
+  const auszug = extrahiereLagebericht(text)
+  if (auszug === null) return null
+  return { auszug, guidance: extrahiereProgose(text) }
 }

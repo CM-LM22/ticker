@@ -329,15 +329,18 @@ async function holeEsefZahlen(entry: WatchlistEntry, uebersprungen: string[]): P
     // weil der erste Versuch nichts fand), wird er hier nachgeholt.
     const vorhandenerAuszug = await readBerichtAuszug(entry.ticker)
     if (
-      (vorhandenerAuszug === null || vorhandenerAuszug.periodEnd < filing.periodEnd) &&
+      (vorhandenerAuszug === null ||
+        vorhandenerAuszug.periodEnd < filing.periodEnd ||
+        vorhandenerAuszug.guidance === null) &&
       filing.reportUrl !== null
     ) {
-      const auszug = await holeEsefAuszug(filing.reportUrl)
-      if (auszug !== null) {
+      const ergebnis = await holeEsefAuszug(filing.reportUrl)
+      if (ergebnis !== null) {
         await saveBerichtAuszug({
           ticker: entry.ticker,
           periodEnd: filing.periodEnd,
-          auszug,
+          auszug: ergebnis.auszug,
+          guidance: ergebnis.guidance ?? '',
           dokumentUrl: filing.reportUrl,
         })
       } else {
@@ -360,12 +363,13 @@ async function holeEsefZahlen(entry: WatchlistEntry, uebersprungen: string[]): P
   if (neueste !== undefined && reportUrl !== null) {
     const vorhanden = await readBerichtAuszug(entry.ticker)
     if (vorhanden === null || vorhanden.periodEnd < neueste.periodEnd) {
-      const auszug = await holeEsefAuszug(reportUrl)
-      if (auszug !== null) {
+      const ergebnis = await holeEsefAuszug(reportUrl)
+      if (ergebnis !== null) {
         await saveBerichtAuszug({
           ticker: entry.ticker,
           periodEnd: neueste.periodEnd,
-          auszug,
+          auszug: ergebnis.auszug,
+          guidance: ergebnis.guidance ?? '',
           dokumentUrl: reportUrl,
         })
       } else {
@@ -391,7 +395,13 @@ async function holeAuszug(entry: WatchlistEntry, uebersprungen: string[]): Promi
   const quelle = await latestPeriodSource(entry.ticker)
   if (quelle === null) return
   const vorhanden = await readBerichtAuszug(entry.ticker)
-  if (vorhanden !== null && vorhanden.periodEnd >= quelle.periodEnd) {
+  // guidance === null heisst: mit der alten Fassung geholt, die noch
+  // nicht nach der Prognose gesucht hat — einmal nachholen.
+  if (
+    vorhanden !== null &&
+    vorhanden.periodEnd >= quelle.periodEnd &&
+    vorhanden.guidance !== null
+  ) {
     uebersprungen.push('Auszug aktuell')
     return
   }
@@ -405,6 +415,7 @@ async function holeAuszug(entry: WatchlistEntry, uebersprungen: string[]): Promi
     ticker: entry.ticker,
     periodEnd: quelle.periodEnd,
     auszug: ergebnis.auszug,
+    guidance: ergebnis.guidance ?? '',
     dokumentUrl: ergebnis.dokumentUrl,
   })
 }

@@ -73,7 +73,13 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
       <p className="back">
         <Link href="/">← Uebersicht</Link>
         {'  '}
-        <a href={`/titel/${entry.ticker.toLowerCase()}/bericht.pdf`}>Ein-Seiten-Bericht (PDF)</a>
+        <a
+          href={`/titel/${entry.ticker.toLowerCase()}/bericht.pdf`}
+          target="_blank"
+          rel="noopener"
+        >
+          Ein-Seiten-Bericht (PDF)
+        </a>
         {eigene.has(entry.ticker) && (
           <>
             {'  '}
@@ -303,6 +309,16 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
               {absatz}
             </p>
           ))}
+          {auszug.guidance !== null && auszug.guidance.length > 0 && (
+            <>
+              <h2>Prognose des Managements — woertlich</h2>
+              {auszug.guidance.split('\n\n').map((absatz) => (
+                <p key={absatz.slice(0, 40)} className="auszug">
+                  {absatz}
+                </p>
+              ))}
+            </>
+          )}
         </>
       )}
 

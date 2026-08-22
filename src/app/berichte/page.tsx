@@ -26,7 +26,9 @@ export default async function BerichtePage() {
       </p>
 
       <p className="no-print actions">
-        <a href="/berichte.pdf">Als PDF herunterladen</a>
+        <a href="/berichte.pdf" target="_blank" rel="noopener">
+          Als PDF herunterladen
+        </a>
         <span className="muted">
           {' '}
           Eine Seite, A4. Je Titel gibt es zusaetzlich einen Ein-Seiten-Bericht mit
@@ -63,7 +65,12 @@ export default async function BerichtePage() {
                   <strong>{brief.ticker}</strong>
                 </Link>
                 <span className="muted"> {brief.name} </span>
-                <a className="no-print" href={`/titel/${brief.ticker.toLowerCase()}/bericht.pdf`}>
+                <a
+                  className="no-print"
+                  href={`/titel/${brief.ticker.toLowerCase()}/bericht.pdf`}
+                  target="_blank"
+                  rel="noopener"
+                >
                   PDF
                 </a>
               </td>
