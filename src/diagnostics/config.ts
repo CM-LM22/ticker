@@ -6,6 +6,8 @@
  * Schluessel, ueber den man etwas erfaehrt. Wahr oder falsch reicht,
  * um "habe ich alles eingetragen?" zu beantworten.
  */
+import { DATABASE_URL_CANDIDATES, resolveDatabaseUrl } from '../db/client'
+
 export interface ConfigCheck {
   name: string
   gesetzt: boolean
@@ -17,6 +19,37 @@ export interface ConfigCheck {
 
 function wert(name: string): string {
   return process.env[name]?.trim() ?? ''
+}
+
+/**
+ * Sucht alle bekannten Namen ab und meldet, welcher gefunden wurde.
+ * Ohne diese Aufschluesselung sucht man lange, wenn die Integration
+ * einen anderen Namen vergeben hat als erwartet.
+ */
+function datenbankPruefung(): ConfigCheck {
+  const fund = resolveDatabaseUrl()
+  const gefundene = DATABASE_URL_CANDIDATES.filter((name) => wert(name).length > 0)
+
+  if (fund === null) {
+    return {
+      name: 'DATABASE_URL',
+      gesetzt: false,
+      pflicht: true,
+      wofuer: 'Speicher fuer Kurse, Berichtszahlen und Meldungen',
+      hinweis: `Keiner dieser Namen ist gesetzt: ${DATABASE_URL_CANDIDATES.join(', ')}. Nach dem Eintragen neu deployen, sonst greift es nicht.`,
+    }
+  }
+
+  return {
+    name: 'DATABASE_URL',
+    gesetzt: true,
+    pflicht: true,
+    wofuer: 'Speicher fuer Kurse, Berichtszahlen und Meldungen',
+    hinweis:
+      fund.name === 'DATABASE_URL'
+        ? null
+        : `Gefunden unter ${fund.name}${gefundene.length > 1 ? ` (gesetzt: ${gefundene.join(', ')})` : ''}.`,
+  }
 }
 
 export function checkConfiguration(): ConfigCheck[] {
@@ -32,13 +65,7 @@ export function checkConfiguration(): ConfigCheck[] {
       wofuer: 'Passwortschutz der Oberflaeche',
       hinweis: null,
     },
-    {
-      name: 'DATABASE_URL',
-      gesetzt: wert('DATABASE_URL').length > 0,
-      pflicht: true,
-      wofuer: 'Speicher fuer Kurse, Berichtszahlen und Meldungen',
-      hinweis: null,
-    },
+    datenbankPruefung(),
     {
       name: 'TWELVEDATA_API_KEY',
       gesetzt: wert('TWELVEDATA_API_KEY').length > 0,

@@ -7,6 +7,10 @@ beforeEach(() => {
   for (const name of [
     'APP_PASSWORD',
     'DATABASE_URL',
+    'POSTGRES_URL',
+    'NEON_DATABASE_URL',
+    'DATABASE_URL_UNPOOLED',
+    'POSTGRES_URL_NON_POOLING',
     'TWELVEDATA_API_KEY',
     'SEC_USER_AGENT',
     'CRON_SECRET',
@@ -32,6 +36,29 @@ describe('checkConfiguration', () => {
   it('meldet fehlende Pflichtvariablen', () => {
     expect(finde('DATABASE_URL').gesetzt).toBe(false)
     expect(finde('DATABASE_URL').pflicht).toBe(true)
+  })
+
+  it('nennt beim Fehlen alle gesuchten Namen', () => {
+    expect(finde('DATABASE_URL').hinweis).toContain('POSTGRES_URL')
+  })
+
+  it('findet die Verbindung auch unter dem Namen der Vercel-Integration', () => {
+    // Die Neon-Integration legt sie je nach Weg anders ab. Ohne diese
+    // Toleranz meldet die App "nicht eingerichtet", obwohl alles da ist.
+    process.env['POSTGRES_URL'] = 'postgres://benutzer:wort@host/db'
+    expect(finde('DATABASE_URL').gesetzt).toBe(true)
+    expect(finde('DATABASE_URL').hinweis).toContain('POSTGRES_URL')
+  })
+
+  it('bevorzugt DATABASE_URL, wenn mehrere Namen gesetzt sind', () => {
+    process.env['DATABASE_URL'] = 'postgres://a/db'
+    process.env['POSTGRES_URL'] = 'postgres://b/db'
+    expect(finde('DATABASE_URL').hinweis).toBeNull()
+  })
+
+  it('verraet die Verbindungszeichenfolge nicht', () => {
+    process.env['POSTGRES_URL'] = 'postgres://benutzer:streng-geheim@host/db'
+    expect(JSON.stringify(checkConfiguration())).not.toContain('streng-geheim')
   })
 
   it('gibt niemals den Wert zurueck, auch nicht gekuerzt', () => {
