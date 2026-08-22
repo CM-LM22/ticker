@@ -95,4 +95,21 @@ export async function ensureSchema(): Promise<void> {
       note        text
     )
   `
+
+  // Analystenkonsens als Monatsstand je Titel. Die Veraenderung
+  // zwischen zwei Staenden wird als Meldung in analyst_action gelegt;
+  // diese Tabelle haelt nur den Verlauf fuer die Anzeige.
+  await sql`
+    CREATE TABLE IF NOT EXISTS analyst_trend (
+      ticker      text NOT NULL,
+      period      char(7) NOT NULL,
+      strong_buy  integer NOT NULL,
+      buy         integer NOT NULL,
+      hold        integer NOT NULL,
+      sell        integer NOT NULL,
+      strong_sell integer NOT NULL,
+      fetched_at  timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (ticker, period)
+    )
+  `
 }

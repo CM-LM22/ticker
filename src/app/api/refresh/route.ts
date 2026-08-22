@@ -1,56 +1,82 @@
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { WATCHLIST } from '@/config/watchlist'
 import { ensureSchema } from '@/db/migrate'
 import { hasDatabase, MissingDatabaseUrl } from '@/db/client'
 import {
+  lastFundamentalsSuccess,
+  latestBarDay,
   loadUnnotifiedActions,
   markNotified,
+  readLatestTrend,
   recordRun,
   saveBars,
   savePeriods,
+  saveTrends,
   storeAnalystActions,
+  trendFetchedAt,
 } from '@/db/repository'
-import { clipDigestBody, formatAnalystDigest } from '@/domain/analyst-actions'
 import type { AnalystAction } from '@/domain/analyst-actions'
-import { TelegramNotifier, readTelegramConfig } from '@/providers/telegram'
-import { YahooRatingsProvider } from '@/providers/yahoo-ratings'
+import { clipDigestBody, formatAnalystDigest } from '@/domain/analyst-actions'
+import { abrufIstFrisch, kurseSindFrisch } from '@/domain/freshness'
 import type { ReportedPeriod } from '@/domain/fundamentals'
 import type { WatchlistEntry } from '@/domain/instrument'
+import { trendToAction } from '@/domain/trend-diff'
+import {
+  fetchFinnhubJson,
+  finnhubSymbolFor,
+  parseRecommendationTrends,
+  recommendationUrl,
+} from '@/providers/finnhub'
 import { CompanyFactsSchema, companyFactsUrl, extractPeriods } from '@/providers/sec-xbrl'
-import { StooqPriceProvider } from '@/providers/stooq'
 import { TwelveDataPriceProvider } from '@/providers/twelvedata'
-import { buildCikIndex, CompanyTickersSchema, COMPANY_TICKERS_URL, resolveCik } from '@/providers/edgar-index'
+import {
+  buildCikIndex,
+  CompanyTickersSchema,
+  COMPANY_TICKERS_URL,
+  resolveCik,
+} from '@/providers/edgar-index'
 import type { CikIndex } from '@/providers/edgar-index'
 
 /**
- * Holt die Daten und schreibt sie in die Datenbank.
+ * Holt Kurse, Berichtszahlen und den Analystenkonsens und schreibt
+ * alles nach Postgres. Ein Endpunkt, ein Speicher.
  *
- * Stapelweise, weil serverlose Funktionen ein Zeitlimit haben und das
- * je nach Tarif unterschiedlich ausfaellt. Der Endpunkt verarbeitet ein
- * Stueck der Watchlist und meldet, wo er stehengeblieben ist; der
- * Aufrufer ruft erneut auf, bis `done` wahr ist. Damit ist er von der
- * Zeitgrenze unabhaengig, statt an ihr zu scheitern.
+ * Stapelweise, weil serverlose Funktionen ein Zeitlimit haben. Der
+ * Knopf in der Oberflaeche ruft nach, bis `done` kommt; der taegliche
+ * Cron bekommt einen langen Lauf und verkettet sich notfalls selbst.
+ *
+ * Frische zuerst: Was heute schon geholt wurde, wird uebersprungen.
+ * Damit fuellt ein zweiter Druck auf den Knopf nur die Luecken, statt
+ * das Tagesbudget der Gratis-Tarife noch einmal auszugeben.
  */
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 300
 
-// Kleiner als frueher: die SEC-Antworten sind gross, und der
-// Gratis-Tarif von Twelve Data erlaubt nur acht Abrufe je Minute.
 const DEFAULT_LIMIT = 4
-const MAX_LIMIT = 10
-/** Historie, die wir vorhalten: 52 Wochen plus Vorlauf fuer den 200-Tage-Schnitt. */
+const MAX_LIMIT = 40
+/** Historie: 52 Wochen plus Vorlauf fuer den 200-Tage-Schnitt. */
 const HISTORY_DAYS = 420
+/**
+ * Abstand zwischen zwei Twelve-Data-Abrufen. Der Gratis-Tarif erlaubt
+ * acht je Minute; 8 Sekunden halten jeden Lauf darunter, egal wie die
+ * Stapel geschnitten sind.
+ */
+const TWELVEDATA_ABSTAND_MS = 8_000
+/** Hoechstens so viele Kettenglieder je Cron-Anstoss, als Notbremse. */
+const MAX_KETTE = 12
 
-/** Die Kuerzelliste der SEC ist gross; einmal je Instanz reicht. */
 let cikIndexCache: CikIndex | null = null
+let letzterTwelveDataAbruf = 0
 
 interface Ergebnis {
   ticker: string
   bars: number
   periods: number
-  actions: number
+  trends: number
+  uebersprungen: string[]
   note: string | null
 }
 
@@ -58,11 +84,14 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function ladeCikIndex(userAgent: string): Promise<CikIndex> {
   if (cikIndexCache !== null) return cikIndexCache
   const response = await fetch(COMPANY_TICKERS_URL, {
     headers: { 'User-Agent': userAgent, Accept: 'application/json' },
-    // Einen Tag zwischenspeichern: die Liste aendert sich selten.
     next: { revalidate: 86_400 },
   })
   if (!response.ok) throw new Error(`company_tickers.json: HTTP ${response.status}`)
@@ -70,15 +99,63 @@ async function ladeCikIndex(userAgent: string): Promise<CikIndex> {
   return cikIndexCache
 }
 
-async function holeKurse(entry: WatchlistEntry, since: string): Promise<number> {
-  const twelve = process.env['TWELVEDATA_API_KEY']?.trim() ?? ''
-  const provider =
-    twelve.length > 0 ? new TwelveDataPriceProvider(twelve) : new StooqPriceProvider()
-  const series = await provider.fetchDailyHistory({ instrument: entry, since })
-  return saveBars(entry.ticker, series)
+/** Wartet, bis der Mindestabstand zum letzten Twelve-Data-Abruf um ist. */
+async function twelveDataTakt(): Promise<void> {
+  const wartezeit = letzterTwelveDataAbruf + TWELVEDATA_ABSTAND_MS - Date.now()
+  if (wartezeit > 0) await sleep(wartezeit)
+  letzterTwelveDataAbruf = Date.now()
 }
 
-async function holeBerichtszahlen(entry: WatchlistEntry): Promise<number> {
+/**
+ * Kurse fuer einen Titel. XETRA wird zuerst direkt versucht; scheitert
+ * das endgueltig (kein Ratenlimit) und es gibt eine US-Notierung, wird
+ * die geholt. Kurse in Dollar sind besser als gar keine, und die
+ * Waehrung steht an jeder Zahl dran.
+ */
+async function holeKurse(
+  entry: WatchlistEntry,
+  since: string,
+  uebersprungen: string[],
+): Promise<{ bars: number; hinweis: string | null }> {
+  const heute = new Date()
+  if (kurseSindFrisch(await latestBarDay(entry.ticker), heute)) {
+    uebersprungen.push('Kurse aktuell')
+    return { bars: 0, hinweis: null }
+  }
+
+  const twelve = process.env['TWELVEDATA_API_KEY']?.trim() ?? ''
+  if (twelve.length === 0) throw new Error('TWELVEDATA_API_KEY fehlt')
+  const provider = new TwelveDataPriceProvider(twelve)
+
+  await twelveDataTakt()
+  try {
+    const series = await provider.fetchDailyHistory({ instrument: entry, since })
+    return { bars: await saveBars(entry.ticker, series), hinweis: null }
+  } catch (fehler) {
+    const retryable =
+      typeof fehler === 'object' && fehler !== null && 'retryable' in fehler
+        ? (fehler as { retryable: boolean }).retryable
+        : false
+    if (retryable || entry.venue !== 'XETRA' || entry.secTickerHint === undefined) throw fehler
+
+    // Rueckfall auf die US-Notierung, unter dem eigenen Kuerzel gespeichert.
+    await twelveDataTakt()
+    const ersatz: WatchlistEntry = { ...entry, ticker: entry.secTickerHint, venue: 'NYSE' }
+    const series = await provider.fetchDailyHistory({ instrument: ersatz, since })
+    const bars = await saveBars(entry.ticker, { ...series, ticker: entry.ticker })
+    return { bars, hinweis: `Kurse ueber US-Notierung ${entry.secTickerHint} (${series.currency})` }
+  }
+}
+
+async function holeBerichtszahlen(
+  entry: WatchlistEntry,
+  uebersprungen: string[],
+): Promise<number> {
+  if (abrufIstFrisch(await lastFundamentalsSuccess(entry.ticker), new Date())) {
+    uebersprungen.push('Berichtszahlen aktuell')
+    return 0
+  }
+
   const userAgent = process.env['SEC_USER_AGENT']?.trim() ?? ''
   if (!userAgent.includes('@')) throw new Error('SEC_USER_AGENT fehlt oder hat keine E-Mail')
 
@@ -98,54 +175,92 @@ async function holeBerichtszahlen(entry: WatchlistEntry): Promise<number> {
   return savePeriods(entry.ticker, periods)
 }
 
+/**
+ * Analystenkonsens von Finnhub. Der Vergleich mit dem letzten Stand
+ * ergibt die Meldung; gespeichert wird beides. Ohne Schluessel wird
+ * still uebersprungen, das ist ein bekannter Zustand und kein Fehler.
+ */
+async function holeKonsens(
+  entry: WatchlistEntry,
+  gesammelt: AnalystAction[],
+  uebersprungen: string[],
+): Promise<number> {
+  const finnhub = process.env['FINNHUB_API_KEY']?.trim() ?? ''
+  if (finnhub.length === 0) {
+    uebersprungen.push('Konsens: kein Schluessel')
+    return 0
+  }
+  const symbol = finnhubSymbolFor(entry)
+  if (symbol === null) {
+    uebersprungen.push('Konsens: keine US-Notierung')
+    return 0
+  }
+  if (abrufIstFrisch(await trendFetchedAt(entry.ticker), new Date())) {
+    uebersprungen.push('Konsens aktuell')
+    return 0
+  }
+
+  const roh = await fetchFinnhubJson(recommendationUrl(symbol, finnhub))
+  const trends = parseRecommendationTrends(roh, entry.ticker)
+  if (trends.length === 0) {
+    uebersprungen.push('Konsens: keine Abdeckung')
+    return 0
+  }
+
+  const vorher = await readLatestTrend(entry.ticker)
+  // Nur die juengsten sechs Monate aufheben, der Rest ist Anzeige-Ballast.
+  await saveTrends(trends.slice(0, 6))
+  const neuester = trends[0]
+  if (neuester !== undefined) {
+    const action = trendToAction(vorher, neuester)
+    if (action !== null) gesammelt.push(action)
+  }
+  return trends.length
+}
+
 async function verarbeite(
   entry: WatchlistEntry,
   since: string,
   gesammelt: AnalystAction[],
 ): Promise<Ergebnis> {
   const notizen: string[] = []
+  const uebersprungen: string[] = []
   let bars = 0
   let periods = 0
-  let actions = 0
+  let trends = 0
 
   try {
-    bars = await holeKurse(entry, since)
+    const kurse = await holeKurse(entry, since, uebersprungen)
+    bars = kurse.bars
+    if (kurse.hinweis !== null) notizen.push(kurse.hinweis)
   } catch (error) {
     notizen.push(`Kurse: ${message(error)}`)
   }
 
-  // Nur versuchen, wo eine SEC-Registrierung ueberhaupt erwartet wird.
   if (entry.expectedCoverage !== 'none') {
     try {
-      periods = await holeBerichtszahlen(entry)
+      periods = await holeBerichtszahlen(entry, uebersprungen)
     } catch (error) {
       notizen.push(`Berichtszahlen: ${message(error)}`)
     }
   }
 
   try {
-    const items = await new YahooRatingsProvider().fetchHistory(entry)
-    gesammelt.push(...items)
-    actions = items.length
+    trends = await holeKonsens(entry, gesammelt, uebersprungen)
   } catch (error) {
-    notizen.push(`Analysten: ${message(error)}`)
+    notizen.push(`Konsens: ${message(error)}`)
   }
 
   const note = notizen.length === 0 ? null : notizen.join(' | ')
   await recordRun(entry.ticker, notizen.length === 0, bars, periods, note)
-  return { ticker: entry.ticker, bars, periods, actions, note }
+  return { ticker: entry.ticker, bars, periods, trends, uebersprungen, note }
 }
 
-/**
- * Zustellung aus der Ausgangspost der Datenbank, nicht aus dem
- * Arbeitsspeicher dieses Aufrufs. Bricht ein Lauf ab, bleibt die
- * Meldung liegen und geht beim naechsten Mal raus, statt verloren zu
- * gehen.
- */
 async function stelleZu(): Promise<{ zugestellt: number; note: string | null }> {
   const offen = await loadUnnotifiedActions()
   if (offen.length === 0) return { zugestellt: 0, note: null }
 
+  const { readTelegramConfig, TelegramNotifier } = await import('@/providers/telegram')
   const telegram = readTelegramConfig()
   if (telegram === null) {
     return { zugestellt: 0, note: 'Telegram nicht eingerichtet, Meldungen nur in der Oberflaeche.' }
@@ -157,16 +272,14 @@ async function stelleZu(): Promise<{ zugestellt: number; note: string | null }> 
     clipDigestBody(digest.body),
   )
   if (!result.ok) {
-    // Nicht als zugestellt markieren: dann geht es beim naechsten Lauf
-    // erneut raus, statt still zu verschwinden.
     return { zugestellt: 0, note: `Telegram fehlgeschlagen: ${result.error ?? 'unbekannt'}` }
   }
-
   await markNotified(offen.map((action) => action.sourceEventId))
   return { zugestellt: offen.length, note: null }
 }
 
 async function lauf(offset: number, limit: number, deadline: number): Promise<NextResponse> {
+  const startedAt = Date.now()
   await ensureSchema()
 
   const since = new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10)
@@ -179,20 +292,11 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
     if (entry === undefined) break
     ergebnisse.push(await verarbeite(entry, since, analysten))
     position += 1
-    // Vor dem Zeitlimit aufhoeren und den Rest dem naechsten Aufruf
-    // ueberlassen, statt mitten im Schreiben abgeschnitten zu werden.
     if (Date.now() > deadline) break
   }
 
   const done = position >= WATCHLIST.length
   const fehler = ergebnisse.filter((e) => e.note !== null).length
-  // Eine Zeile je Stapel, damit im Protokoll sichtbar ist, wo ein Lauf
-  // stehenbleibt. Ohne sie sieht man nur, dass nichts mehr kommt.
-  console.info(
-    `refresh: ${offset} bis ${position - 1} von ${WATCHLIST.length}, ` +
-      `${ergebnisse.length} verarbeitet, ${fehler} mit Hinweis, ` +
-      `${Math.round((Date.now() - (deadline - 45_000)) / 1000)}s`,
-  )
   const neue = await storeAnalystActions(
     analysten,
     fehler === 0 ? null : `${fehler} Titel mit Hinweis`,
@@ -207,6 +311,12 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
     zustellnote = zustellung.note
     revalidatePath('/', 'layout')
   }
+
+  console.info(
+    `refresh: ${offset} bis ${position - 1} von ${WATCHLIST.length}, ` +
+      `${ergebnisse.length} verarbeitet, ${fehler} mit Hinweis, ` +
+      `${Math.round((Date.now() - startedAt) / 1000)}s`,
+  )
 
   return NextResponse.json({
     ok: true,
@@ -228,7 +338,11 @@ function grenzen(request: NextRequest): { offset: number; limit: number } {
   return { offset, limit: Math.min(MAX_LIMIT, Math.max(1, roh)) }
 }
 
-async function behandle(request: NextRequest, deadlineMs: number): Promise<NextResponse> {
+async function behandle(
+  request: NextRequest,
+  deadlineMs: number,
+  limitOverride?: number,
+): Promise<NextResponse> {
   if (!hasDatabase()) {
     return NextResponse.json(
       { ok: false, fehler: new MissingDatabaseUrl().message },
@@ -237,18 +351,54 @@ async function behandle(request: NextRequest, deadlineMs: number): Promise<NextR
   }
   const { offset, limit } = grenzen(request)
   try {
-    return await lauf(offset, limit, Date.now() + deadlineMs)
+    return await lauf(offset, limitOverride ?? limit, Date.now() + deadlineMs)
   } catch (error) {
+    console.error('refresh gescheitert:', error)
     return NextResponse.json({ ok: false, fehler: message(error) }, { status: 500 })
   }
 }
 
-/** Von der Oberflaeche: ein Stapel je Aufruf. */
+/** Von der Oberflaeche: ein Stapel je Aufruf, der Knopf ruft nach. */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   return behandle(request, 45_000)
 }
 
-/** Von Vercel Cron: so viel wie in die Zeit passt. */
+/**
+ * Vom taeglichen Cron: ein langer Lauf, und wenn der nicht reicht,
+ * haengt sich der naechste selbst an. `after` laeuft nach der Antwort,
+ * die Kette kostet den Ausloeser also nichts. Die Notbremse verhindert
+ * Endlosschleifen, falls kein Fortschritt mehr passiert.
+ */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  return behandle(request, 45_000)
+  const cronSecret = process.env['CRON_SECRET']?.trim() ?? ''
+  const istCron =
+    cronSecret.length > 0 &&
+    request.headers.get('authorization') === `Bearer ${cronSecret}`
+
+  const antwort = await behandle(request, istCron ? 250_000 : 45_000, istCron ? 40 : undefined)
+
+  if (istCron && antwort.status === 200) {
+    const daten = (await antwort.clone().json()) as {
+      done?: boolean
+      naechsterOffset?: number | null
+    }
+    const kette = Number(request.nextUrl.searchParams.get('kette') ?? 0) || 0
+    if (daten.done !== true && daten.naechsterOffset != null && kette < MAX_KETTE) {
+      const weiter = new URL('/api/refresh', request.nextUrl.origin)
+      weiter.searchParams.set('offset', String(daten.naechsterOffset))
+      weiter.searchParams.set('kette', String(kette + 1))
+      after(async () => {
+        try {
+          await fetch(weiter, {
+            method: 'GET',
+            headers: { authorization: `Bearer ${cronSecret}` },
+          })
+        } catch (fehler) {
+          console.error('Kettenglied fehlgeschlagen:', fehler)
+        }
+      })
+    }
+  }
+
+  return antwort
 }

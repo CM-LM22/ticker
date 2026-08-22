@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { DataBanner } from '@/components/DataBanner'
 import { Disclaimer } from '@/components/Disclaimer'
 import { PriceChart } from '@/components/PriceChart'
+import { QuoteBadge } from '@/components/QuoteBadge'
 import { RangeBar } from '@/components/RangeBar'
 import { WATCHLIST } from '@/config/watchlist'
 import { loadTitleData } from '@/data/load'
@@ -53,7 +54,7 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
       </p>
 
       <h1>
-        {entry.ticker} <span className="muted">{entry.name}</span>
+        {entry.ticker} <span className="muted">{entry.name}</span> <QuoteBadge ticker={entry.ticker} />
       </h1>
       <p className="lede">
         {entry.venue}

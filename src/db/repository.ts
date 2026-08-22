@@ -325,3 +325,113 @@ export async function markNotified(ids: readonly string[]): Promise<void> {
     WHERE source_event_id = ANY(${[...ids]}::text[])
   `
 }
+
+/* --- Analystenkonsens (Monatsstaende) ------------------------------ */
+
+import type { RecommendationTrend } from '../providers/finnhub'
+
+/** Juengster gespeicherter Stand je Titel, null wenn keiner da ist. */
+export async function readLatestTrend(ticker: string): Promise<RecommendationTrend | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT ticker, period, strong_buy, buy, hold, sell, strong_sell
+    FROM analyst_trend WHERE ticker = ${ticker}
+    ORDER BY period DESC LIMIT 1
+  `) as Record<string, unknown>[]
+  const row = rows[0]
+  if (row === undefined) return null
+  return {
+    ticker: String(row['ticker']),
+    period: String(row['period']),
+    strongBuy: Number(row['strong_buy']),
+    buy: Number(row['buy']),
+    hold: Number(row['hold']),
+    sell: Number(row['sell']),
+    strongSell: Number(row['strong_sell']),
+  }
+}
+
+export async function saveTrends(trends: readonly RecommendationTrend[]): Promise<void> {
+  const sql = getSql()
+  for (const trend of trends) {
+    await sql`
+      INSERT INTO analyst_trend (ticker, period, strong_buy, buy, hold, sell, strong_sell)
+      VALUES (${trend.ticker}, ${trend.period}, ${trend.strongBuy}, ${trend.buy},
+              ${trend.hold}, ${trend.sell}, ${trend.strongSell})
+      ON CONFLICT (ticker, period) DO UPDATE SET
+        strong_buy = EXCLUDED.strong_buy, buy = EXCLUDED.buy, hold = EXCLUDED.hold,
+        sell = EXCLUDED.sell, strong_sell = EXCLUDED.strong_sell, fetched_at = now()
+    `
+  }
+}
+
+export async function trendFetchedAt(ticker: string): Promise<Date | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT max(fetched_at) AS letzte FROM analyst_trend WHERE ticker = ${ticker}
+  `) as Record<string, unknown>[]
+  const value = rows[0]?.['letzte']
+  if (value === null || value === undefined) return null
+  return value instanceof Date ? value : new Date(String(value))
+}
+
+export interface TrendPair {
+  aktuell: RecommendationTrend
+  vormonat: RecommendationTrend | null
+}
+
+/** Die zwei juengsten Monatsstaende je Titel, fuer die Anzeige. */
+export async function loadTrendOverview(): Promise<Map<string, TrendPair>> {
+  const sql = getSql()
+  // ORDER BY gehoert in die Abfrage, nicht in eine Annahme ueber die
+  // Reihenfolge der Zeilen: ohne ihn darf Postgres liefern, wie es will.
+  const rows = (await sql`
+    SELECT ticker, period, strong_buy, buy, hold, sell, strong_sell, rang FROM (
+      SELECT *, row_number() OVER (PARTITION BY ticker ORDER BY period DESC) AS rang
+      FROM analyst_trend
+    ) t WHERE rang <= 2 ORDER BY ticker, rang
+  `) as Record<string, unknown>[]
+
+  const paare = new Map<string, TrendPair>()
+  for (const row of rows) {
+    const trend: RecommendationTrend = {
+      ticker: String(row['ticker']),
+      period: String(row['period']),
+      strongBuy: Number(row['strong_buy']),
+      buy: Number(row['buy']),
+      hold: Number(row['hold']),
+      sell: Number(row['sell']),
+      strongSell: Number(row['strong_sell']),
+    }
+    if (Number(row['rang']) === 1) {
+      paare.set(trend.ticker, { aktuell: trend, vormonat: null })
+    } else {
+      const eintrag = paare.get(trend.ticker)
+      if (eintrag !== undefined) eintrag.vormonat = trend
+    }
+  }
+  return paare
+}
+
+/** Aeltester Kurstag je Titel fehlt bewusst; gebraucht wird der neueste. */
+export async function latestBarDay(ticker: string): Promise<string | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT max(day) AS tag FROM price_bar WHERE ticker = ${ticker}
+  `) as Record<string, unknown>[]
+  const value = rows[0]?.['tag']
+  if (value === null || value === undefined) return null
+  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10)
+}
+
+/** Zeitpunkt des letzten erfolgreichen Abrufs mit Berichtszahlen je Titel. */
+export async function lastFundamentalsSuccess(ticker: string): Promise<Date | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT max(finished_at) AS letzte FROM refresh_run
+    WHERE ticker = ${ticker} AND periods > 0
+  `) as Record<string, unknown>[]
+  const value = rows[0]?.['letzte']
+  if (value === null || value === undefined) return null
+  return value instanceof Date ? value : new Date(String(value))
+}

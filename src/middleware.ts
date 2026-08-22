@@ -8,7 +8,7 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/session'
  * keine Kurse, keine Watchlist, keine einzige Seite.
  */
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon.svg).*)'],
 }
 
 const OFFEN = new Set(['/login', '/api/login'])

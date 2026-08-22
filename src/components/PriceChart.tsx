@@ -1,7 +1,24 @@
+'use client'
+
+import { useMemo, useState } from 'react'
 import { buildChart } from '@/lib/chart'
 import { formatDayShort, formatNumber } from '@/lib/format'
 import type { PriceBar } from '@/domain/price-series'
 
+const BEREICHE = [
+  ['1M', 31],
+  ['3M', 92],
+  ['6M', 183],
+  ['1J', 366],
+] as const
+
+type Bereich = (typeof BEREICHE)[number][0]
+
+/**
+ * Kursverlauf mit Zeitraum-Wahl. Die Auswahl schneidet die bereits
+ * geladene Reihe zu, es wird nichts nachgeladen: die 52 Wochen sind da,
+ * kuerzere Fenster sind eine Teilmenge davon.
+ */
 export function PriceChart({
   bars,
   currency,
@@ -11,18 +28,50 @@ export function PriceChart({
   currency: string
   height?: number
 }) {
+  const [bereich, setBereich] = useState<Bereich>('1J')
+
+  const sichtbar = useMemo(() => {
+    const tage = BEREICHE.find(([name]) => name === bereich)?.[1] ?? 366
+    const letzter = bars[bars.length - 1]
+    if (letzter === undefined) return bars
+    const grenze = new Date(new Date(`${letzter.date}T00:00:00Z`).getTime() - tage * 86_400_000)
+      .toISOString()
+      .slice(0, 10)
+    return bars.filter((bar) => bar.date >= grenze)
+  }, [bars, bereich])
+
   if (bars.length === 0) return <p className="muted">Keine Kurse vorhanden.</p>
 
   const width = 880
   const scaleWidth = 64
-  const chart = buildChart(bars, { width: width - scaleWidth, height, padding: 12, tickCount: 4 })
-  const first = bars[0]
-  const last = bars[bars.length - 1]
-  const middle = bars[Math.floor(bars.length / 2)]
+  const chart = buildChart([...sichtbar], {
+    width: width - scaleWidth,
+    height,
+    padding: 12,
+    tickCount: 4,
+  })
+  const first = sichtbar[0]
+  const last = sichtbar[sichtbar.length - 1]
+  const middle = sichtbar[Math.floor(sichtbar.length / 2)]
   const rising = (last?.close ?? 0) >= (first?.close ?? 0)
 
   return (
     <figure className="chart">
+      <div className="tabs chart-ranges" role="tablist" aria-label="Zeitraum">
+        {BEREICHE.map(([name]) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={bereich === name}
+            className={bereich === name ? 'tab aktiv' : 'tab'}
+            onClick={() => setBereich(name)}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"

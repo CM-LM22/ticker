@@ -421,3 +421,50 @@ Typpruefung und Tests. Das Verzeichnis `scripts/` ist entfallen.
 Die Trennlinie, ab jetzt verbindlich: **GitHub prueft den Code, die
 Anwendung holt die Daten.** Kein Workflow ruft eine externe
 Datenquelle auf, und keiner schreibt ins Repository zurueck.
+
+## E24 Live-Kurse, Analystenkonsens und Frische-Regeln
+
+Ausbau zur Google-Finance-aehnlichen Ansicht, im vorhandenen Design.
+
+**Live-Kurse ueber Finnhub.** /api/quotes holt aktuelle Kurse fuer alle
+US-notierten Titel (60 Abrufe je Minute im Gratis-Tarif), haelt sie 60
+Sekunden im Speicher und teilt einen laufenden Abruf zwischen
+gleichzeitigen Browsern: zehn offene Tabs zahlen einmal auf das
+Minutenbudget ein, nicht zehnmal. Die Uebersicht fragt jede Minute nach
+und zeigt Kurs und Tagesveraenderung; ohne Schluessel bleiben die
+gespeicherten Schlusskurse stehen, und der Grund steht dabei.
+
+**Analystenkonsens statt toter Yahoo-Quelle.** Yahoo blockt auch
+Vercel-Adressen (gemessen); der Poller des Parallel-Laufs ist damit
+ersatzlos gestrichen. Finnhub liefert kostenlos die Verteilung der
+Empfehlungen je Monat. Die Verschiebung zwischen zwei Staenden wird als
+Meldung durch dieselbe Leitung geschickt wie alles andere:
+Erstlauf-Schutz, Deduplizierung ueber die Fremd-ID (die die Verteilung
+selbst enthaelt), Zustell-Log, Telegram. Einzelurteile mit Haus und
+Kursziel bleiben aussen vor: sie sind das bezahlte Produkt der Banken.
+
+**Frische-Regeln gegen die Ratenlimits.** Twelve Data erlaubt 8 Abrufe
+je Minute und 800 am Tag. Deshalb: Kurse gelten als frisch, wenn der
+neueste Handelstag hoechstens zwei Kalendertage zurueckliegt (am Sonntag
+ist der Freitagsschluss der aktuellste, den es gibt); Berichtszahlen und
+Konsens werden hoechstens einmal in 20 Stunden geholt. Ein zweiter Druck
+auf den Knopf fuellt nur Luecken. Zwischen zwei Twelve-Data-Abrufen
+liegen 8 Sekunden, egal wie die Stapel geschnitten sind.
+
+**XETRA-Rueckfall.** Liefert Twelve Data einen XETRA-Titel nicht und
+gibt es eine US-Notierung, wird die geholt und unter dem eigenen Kuerzel
+gespeichert, mit Hinweis und Waehrung. Dollar-Kurse sind besser als
+keine. Die 16 DAX-Titel ohne US-Notierung bleiben ohne Kurse; das ist
+die gemessene Grenze der Gratisquellen.
+
+**Cron-Kette.** Der taegliche Anstoss bekommt einen langen Lauf
+(maxDuration 300) und haengt sich per after() selbst ein naechstes
+Kettenglied an, bis die Watchlist durch ist, mit Notbremse gegen
+Endlosschleifen. Der Knopf in der Oberflaeche treibt weiterhin kurze
+Stapel.
+
+**Behobener Konstruktionsfehler.** Der Lauf blieb frueher nach zwei
+Stapeln stehen: companyfacts der SEC (zweistellige Megabyte je Titel)
+ging komplett durch Zod, fuenfmal je Aufruf, fuer drei am Ende genutzte
+Konzepte. Jetzt wird der Rumpf grob geprueft und nur validiert, was
+verwendet wird.
