@@ -164,12 +164,17 @@ export async function probeSources(): Promise<SourceProbe[]> {
       if (last === undefined) throw new Error('Antwort ohne Kursfeld')
       return `letzter Preis ${String(last)}`
     }),
-    pruefe('ESEF (filings.xbrl.org)', 'juengste DE-Einreichung', async () => {
-      const daten = await json(
-        'https://filings.xbrl.org/api/filings?filter=%5B%7B%22name%22%3A%22country%22%2C%22op%22%3A%22eq%22%2C%22val%22%3A%22DE%22%7D%5D&page%5Bsize%5D=1',
-      )
-      const anzahl = (daten as { meta?: { count?: number } }).meta?.count
-      return `erreichbar${typeof anzahl === 'number' ? `, ${anzahl} deutsche Einreichungen` : ''}`
+    pruefe('ESEF (GLEIF + filings.xbrl.org)', 'Siemens ueber ISIN', async () => {
+      // Die ganze Kette, wie der Datenabruf sie nutzt: ISIN -> LEI ->
+      // juengste Einreichung mit Fakten-JSON.
+      const { holeLei } = await import('../providers/gleif')
+      const { esefFilingsUrl, parseEsefFilings } = await import('../providers/esef')
+      const lei = await holeLei('DE0007236101')
+      if (lei === null) throw new Error('GLEIF kennt die ISIN nicht')
+      const filings = parseEsefFilings(await json(esefFilingsUrl(lei.lei)))
+      const mitJson = filings.find((filing) => filing.jsonUrl !== null)
+      if (mitJson === undefined) throw new Error(`LEI ${lei.lei}: keine Einreichung mit Fakten-JSON`)
+      return `${lei.name}: Einreichung bis ${mitJson.periodEnd} mit Fakten-JSON`
     }),
     finnhub.length > 0
       ? pruefe('Finnhub', 'Empfehlungen AAPL', async () => {

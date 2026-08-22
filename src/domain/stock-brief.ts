@@ -223,7 +223,7 @@ export function buildStockBrief(input: StockBriefInput): StockBrief {
   if (input.fundamentals === null) {
     luecken.push(
       input.entry.expectedCoverage === 'none'
-        ? 'Keine Berichtszahlen: nicht bei der SEC registriert.'
+        ? 'Keine Berichtszahlen: nicht bei der SEC registriert, ESEF-Jahresbericht noch nicht geholt.'
         : 'Berichtszahlen noch nicht abgerufen.',
     )
   }

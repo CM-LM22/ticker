@@ -640,3 +640,26 @@ Dazu zeichnet das PDF Umsatz und Ergebnis je Quartal als Balken
 (gefuellte Rechtecke im eigenen PDF-Schreiber, Graustufen), und die
 Detailseite zeigt denselben Auszug als Zitatblock mit Link auf das
 Originaldokument.
+
+## E32 DAX-Berichtszahlen aus den amtlichen ESEF-Einreichungen
+
+Die 16 DAX-Titel ohne SEC-Registrierung bekommen ihre Berichtszahlen
+und ihr Narrativ ueber den amtlichen europaeischen Weg: Alle
+EU-boersennotierten Unternehmen muessen Jahresfinanzberichte im
+ESEF-Format einreichen, und filings.xbrl.org stellt sie frei bereit —
+samt fertig extrahierter Fakten als xBRL-JSON. Die Kette: vetteten
+ISIN aus der Watchlist -> LEI ueber das amtliche GLEIF-Register
+(keine von Hand gepflegte Kennnummer, E9) -> juengste Einreichung ->
+Umsatz und Ergebnis nach IFRS-Konzepten (nur Konzernsummen ohne
+Segmentdimensionen), Berichtsjahr plus mitgelieferter
+Vorjahresvergleich -> Lagebericht-Auszug woertlich aus dem
+Berichtsdokument (deutsche Ueberschriften: Wirtschaftsbericht,
+Konzernlagebericht).
+
+Bewusste Grenze: ESEF deckt Jahresberichte ab. Quartalsmitteilungen
+veroeffentlichen deutsche Konzerne als freie PDFs auf ihren
+IR-Seiten; 16 firmenspezifische Scraper waeren dauerhaft fragil.
+Jahreszahlen mit Vorjahresvergleich aus amtlicher Quelle sind
+ehrlicher als geratene Quartale. Das grosse Fakten-JSON wird nur bei
+einer neueren Einreichung geladen; sonst kostet der taegliche
+Abgleich zwei kleine API-Aufrufe.

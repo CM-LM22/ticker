@@ -35,6 +35,8 @@ import {
   parseRecommendationTrends,
   recommendationUrl,
 } from '@/providers/finnhub'
+import { holeEsefAuszug, holeEsefFilings, holeEsefPerioden } from '@/providers/esef'
+import { holeLei } from '@/providers/gleif'
 import { holeMdnaAuszug } from '@/providers/sec-mdna'
 import { CompanyFactsSchema, companyFactsUrl, extractPeriods } from '@/providers/sec-xbrl'
 import {
@@ -295,6 +297,86 @@ async function holeBerichtszahlen(
 }
 
 /**
+ * Jahreszahlen und Lagebericht fuer Titel ohne SEC-Registrierung, aus
+ * den amtlichen ESEF-Einreichungen: ISIN -> LEI (GLEIF) -> juengste
+ * Einreichung (filings.xbrl.org) -> Fakten aus xBRL-JSON plus
+ * woertlicher Lagebericht-Auszug aus dem Berichtsdokument. Dieselbe
+ * Frische-Regel wie bei der SEC: hoechstens ein Versuch je 20 Stunden.
+ */
+async function holeEsefZahlen(entry: WatchlistEntry, uebersprungen: string[]): Promise<number> {
+  if (entry.isin === undefined) {
+    uebersprungen.push('ESEF: keine ISIN hinterlegt')
+    return 0
+  }
+  if (abrufIstFrisch(await lastFundamentalsSuccess(entry.ticker), new Date())) {
+    uebersprungen.push('Berichtszahlen aktuell')
+    return 0
+  }
+
+  const lei = await holeLei(entry.isin)
+  if (lei === null) throw new Error('GLEIF kennt die ISIN nicht')
+
+  const filings = await holeEsefFilings(lei.lei)
+  const filing = filings.find((kandidat) => kandidat.jsonUrl !== null)
+  if (filing === undefined) throw new Error('keine ESEF-Einreichung mit Fakten-JSON gefunden')
+
+  // Jahresberichte aendern sich selten: Das grosse Fakten-JSON wird
+  // nur geladen, wenn die juengste Einreichung neuer ist als das, was
+  // schon gespeichert ist.
+  const vorhandenePeriode = await latestPeriodSource(entry.ticker)
+  if (vorhandenePeriode !== null && filing.periodEnd <= vorhandenePeriode.periodEnd) {
+    // Zahlen sind aktuell. Fehlt nur der Lagebericht-Auszug (etwa
+    // weil der erste Versuch nichts fand), wird er hier nachgeholt.
+    const vorhandenerAuszug = await readBerichtAuszug(entry.ticker)
+    if (
+      (vorhandenerAuszug === null || vorhandenerAuszug.periodEnd < filing.periodEnd) &&
+      filing.reportUrl !== null
+    ) {
+      const auszug = await holeEsefAuszug(filing.reportUrl)
+      if (auszug !== null) {
+        await saveBerichtAuszug({
+          ticker: entry.ticker,
+          periodEnd: filing.periodEnd,
+          auszug,
+          dokumentUrl: filing.reportUrl,
+        })
+      } else {
+        uebersprungen.push('ESEF: kein Lagebericht-Abschnitt gefunden')
+      }
+    }
+    uebersprungen.push('ESEF: keine neuere Einreichung')
+    return 0
+  }
+
+  const perioden = await holeEsefPerioden(filing)
+  if (perioden.length === 0) {
+    throw new Error('Einreichung ohne lesbare Umsatz- oder Ergebnisfakten')
+  }
+  const gespeichert = await savePeriods(entry.ticker, perioden)
+
+  // Lagebericht-Auszug nur, wenn er fehlt oder aelter ist.
+  const neueste = perioden[0]
+  const reportUrl = filing.reportUrl
+  if (neueste !== undefined && reportUrl !== null) {
+    const vorhanden = await readBerichtAuszug(entry.ticker)
+    if (vorhanden === null || vorhanden.periodEnd < neueste.periodEnd) {
+      const auszug = await holeEsefAuszug(reportUrl)
+      if (auszug !== null) {
+        await saveBerichtAuszug({
+          ticker: entry.ticker,
+          periodEnd: neueste.periodEnd,
+          auszug,
+          dokumentUrl: reportUrl,
+        })
+      } else {
+        uebersprungen.push('ESEF: kein Lagebericht-Abschnitt gefunden')
+      }
+    }
+  }
+  return gespeichert
+}
+
+/**
  * Woertlicher MD&A-Auszug zum juengsten Bericht. Geholt wird nur, wenn
  * der gespeicherte Auszug fehlt oder zu einer aelteren Periode gehoert
  * — also praktisch nur nach einer neuen Einreichung. Findet sich kein
@@ -404,6 +486,14 @@ async function verarbeite(
       // Ein fehlender Auszug macht den Lauf nicht kaputt; er fehlt
       // dann eben und der Grund steht am Titel.
       notizen.push(`Auszug: ${message(error)}`)
+    }
+  } else if (entry.venue === 'XETRA') {
+    // Ohne SEC-Registrierung: die amtlichen europaeischen
+    // Jahresberichte (ESEF) samt Lagebericht-Auszug.
+    try {
+      periods = await holeEsefZahlen(entry, uebersprungen)
+    } catch (error) {
+      notizen.push(`Berichtszahlen (ESEF): ${message(error)}`)
     }
   }
 
