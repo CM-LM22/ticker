@@ -15,6 +15,25 @@ const OFFEN = new Set(['/login', '/api/login'])
 
 export async function middleware(request: NextRequest): Promise<NextResponse | Response> {
   const { pathname, search } = request.nextUrl
+
+  // Jede Vercel-Auslieferung ist ein eingefrorener Schnappschuss mit
+  // eigener Adresse. Wer eine alte Deployment-URL aus dem Dashboard
+  // oeffnet, sieht den damaligen Stand — inklusive Demodaten — ohne es
+  // zu merken. Deshalb leiten alle Produktions-Nebenadressen auf die
+  // Hauptadresse um, die immer auf den neuesten Stand zeigt.
+  const kanonisch = process.env['VERCEL_PROJECT_PRODUCTION_URL']?.trim()
+  const host = request.headers.get('host')
+  if (
+    process.env['VERCEL_ENV'] === 'production' &&
+    kanonisch !== undefined &&
+    kanonisch.length > 0 &&
+    host !== null &&
+    host !== kanonisch
+  ) {
+    const ziel = new URL(`${pathname}${search}`, `https://${kanonisch}`)
+    return NextResponse.redirect(ziel, 308)
+  }
+
   if (OFFEN.has(pathname)) return NextResponse.next()
 
   // Vercel Cron ruft ohne Browser und damit ohne Cookie auf. Es weist
