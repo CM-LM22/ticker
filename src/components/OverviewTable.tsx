@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatDay, formatDaysUntil, formatNumber, formatPercent } from '@/lib/format'
 import { texte } from '@/lib/sprache'
 import type { Sprache } from '@/lib/sprache'
@@ -89,6 +89,25 @@ export function OverviewTable({
   const [xetraLaeuft, setXetraLaeuft] = useState(false)
   const [addStatus, setAddStatus] = useState<string | null>(null)
   const [addLaeuft, setAddLaeuft] = useState(false)
+  // Nach links gewischte Zeile im Xetra-Reiter: zeigt den Papierkorb.
+  const [wischOffen, setWischOffen] = useState<string | null>(null)
+  const wischStart = useRef<{ x: number; y: number } | null>(null)
+
+  function wischBeginn(ereignis: React.TouchEvent): void {
+    const punkt = ereignis.touches[0]
+    if (punkt !== undefined) wischStart.current = { x: punkt.clientX, y: punkt.clientY }
+  }
+
+  function wischEnde(ereignis: React.TouchEvent, ticker: string): void {
+    const start = wischStart.current
+    wischStart.current = null
+    const punkt = ereignis.changedTouches[0]
+    if (start === null || punkt === undefined) return
+    const dx = punkt.clientX - start.x
+    const dy = punkt.clientY - start.y
+    if (dx < -40 && Math.abs(dy) < 30) setWischOffen(ticker)
+    else if (dx > 40) setWischOffen(null)
+  }
 
   // Ab zwei Zeichen fragt die Suche zusaetzlich das SEC-Verzeichnis,
   // damit sich neue Titel direkt aus dem Suchfeld hinzufuegen lassen.
@@ -304,23 +323,36 @@ export function OverviewTable({
             const waehrung = quote?.currency ?? zeile.currency
             return (
               <tr key={`${zeile.venue}:${zeile.ticker}`}>
-                <td>
+                <td
+                  className={
+                    tab === 'XETRA-EIGEN' && zeile.eigen
+                      ? `wischbar${wischOffen === zeile.ticker ? ' offen' : ''}`
+                      : undefined
+                  }
+                  onTouchStart={tab === 'XETRA-EIGEN' && zeile.eigen ? wischBeginn : undefined}
+                  onTouchEnd={
+                    tab === 'XETRA-EIGEN' && zeile.eigen
+                      ? (ereignis) => wischEnde(ereignis, zeile.ticker)
+                      : undefined
+                  }
+                >
                   <Link href={`/titel/${zeile.ticker.toLowerCase()}`}>
                     <strong>{zeile.ticker}</strong>
                   </Link>
                   <span className="muted"> {zeile.name}</span>
-                  {tab === 'XETRA-EIGEN' && zeile.eigen && (
-                    <>
-                      {' '}
-                      <button
-                        type="button"
-                        className="zeile-entfernen"
-                        disabled={addLaeuft}
-                        onClick={() => void zeileEntfernen(zeile.ticker)}
-                      >
-                        {t.entfernen}
-                      </button>
-                    </>
+                  {tab === 'XETRA-EIGEN' && zeile.eigen && wischOffen === zeile.ticker && (
+                    <button
+                      type="button"
+                      className="wisch-loeschen"
+                      aria-label={t.entfernen}
+                      disabled={addLaeuft}
+                      onClick={() => {
+                        setWischOffen(null)
+                        void zeileEntfernen(zeile.ticker)
+                      }}
+                    >
+                      🗑
+                    </button>
                   )}
                 </td>
                 <td className="num">

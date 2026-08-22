@@ -624,3 +624,9 @@ export async function latestPeriodSource(
   if (row === undefined) return null
   return { periodEnd: row.period_end.slice(0, 10), sourceUrl: row.source_url }
 }
+
+/** ISIN nachtragen, wenn ein eigener Titel ohne sie angelegt wurde. */
+export async function updateCustomTitleIsin(ticker: string, isin: string): Promise<void> {
+  const sql = getSql()
+  await sql`UPDATE custom_titel SET isin = ${isin} WHERE ticker = ${ticker} AND isin IS NULL`
+}

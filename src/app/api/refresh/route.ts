@@ -2,6 +2,7 @@ import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { WATCHLIST } from '@/config/watchlist'
 import { gesamteWatchlist } from '@/data/gesamt-watchlist'
 import { ensureSchema } from '@/db/migrate'
 import { hasDatabase, MissingDatabaseUrl } from '@/db/client'
@@ -21,6 +22,7 @@ import {
   saveTrends,
   storeAnalystActions,
   trendFetchedAt,
+  updateCustomTitleIsin,
 } from '@/db/repository'
 import type { AnalystAction } from '@/domain/analyst-actions'
 import { clipDigestBody, formatAnalystDigest } from '@/domain/analyst-actions'
@@ -38,6 +40,7 @@ import {
 import { holeEsefAuszug, holeEsefFilings, holeEsefPerioden } from '@/providers/esef'
 import { holeLei } from '@/providers/gleif'
 import { holeMdnaAuszug } from '@/providers/sec-mdna'
+import { holeTradegateTreffer } from '@/providers/tradegate-suche'
 import { CompanyFactsSchema, companyFactsUrl, extractPeriods } from '@/providers/sec-xbrl'
 import {
   fetchTradegateQuote,
@@ -49,6 +52,7 @@ import {
   buildCikIndex,
   CompanyTickersSchema,
   COMPANY_TICKERS_URL,
+  nameKey,
   resolveCik,
 } from '@/providers/edgar-index'
 import type { CikIndex } from '@/providers/edgar-index'
@@ -524,11 +528,40 @@ async function holeKonsens(
   return trends.length
 }
 
+/**
+ * ISIN-Nachtrag fuer eigene deutsche Titel, die noch ohne angelegt
+ * wurden (alter Alpha-Vantage-Weg). Die Tradegate-Suche nach dem
+ * Namen liefert sie nach; uebernommen wird sie nur bei eindeutigem
+ * Namenstreffer (Rechtsformen bereinigt) — sonst lieber keine als
+ * eine falsche. Mit ISIN laufen danach Tagesschluss, Live-Kurs und
+ * ESEF-Jahresbericht von selbst an.
+ */
+async function isinNachtragen(entry: WatchlistEntry): Promise<WatchlistEntry> {
+  if (entry.venue !== 'XETRA' || entry.isin !== undefined) return entry
+  if (WATCHLIST.some((fest) => fest.ticker === entry.ticker)) return entry
+  try {
+    const treffer = await holeTradegateTreffer(entry.name)
+    const schluessel = nameKey(entry.name)
+    const passende = treffer.filter((kandidat) => {
+      const key = nameKey(kandidat.name)
+      return key === schluessel || key.startsWith(schluessel) || schluessel.startsWith(key)
+    })
+    const einziger = passende[0]
+    if (passende.length !== 1 || einziger === undefined) return entry
+    await updateCustomTitleIsin(entry.ticker, einziger.isin)
+    console.info(`refresh: ISIN fuer ${entry.ticker} nachgetragen (${einziger.isin})`)
+    return { ...entry, isin: einziger.isin }
+  } catch {
+    return entry
+  }
+}
+
 async function verarbeite(
-  entry: WatchlistEntry,
+  roherEintrag: WatchlistEntry,
   since: string,
   gesammelt: AnalystAction[],
 ): Promise<Ergebnis> {
+  const entry = await isinNachtragen(roherEintrag)
   const notizen: string[] = []
   const uebersprungen: string[] = []
   let bars = 0
