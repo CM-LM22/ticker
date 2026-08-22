@@ -267,3 +267,43 @@ nur in der Oberflaeche. Der Stand liegt in `data/ratings-state.json`,
 analog zum Kurssnapshot, bis Slice 1 die Queue in Postgres hat. Das
 ersetzt Slice 1 und 2 nicht; es ist der kleinstmoegliche Weg, die
 Ansicht und den Push jetzt zu haben.
+
+## E20 Kostenlose Kursquellen ohne Schluessel scheitern an der Cloud-IP
+
+**Gemessen am 22.08.2026** im Workflow *Kursquellen pruefen*, aus einem
+GitHub-Actions-Runner heraus:
+
+| Quelle | AAPL (US) | SAP (DE) |
+| --- | --- | --- |
+| Stooq | HTML-Bot-Sperre statt CSV, HTTP 200 | dasselbe |
+| Yahoo Chart v8 | HTTP 429 | HTTP 429 |
+
+Yahoo antwortete auch mit browseraehnlichem User-Agent mit 429, und zwar
+bei der zweiten Anfrage ueberhaupt. Das ist keine Frequenzbremse,
+sondern eine Sperre der geteilten Cloud-Adressbereiche. Stooq liefert
+eine JavaScript-Abfrageseite mit HTTP 200 — wer nur den Statuscode
+prueft, speichert HTML als Kurse.
+
+Damit ist E13 ueberholt: Stooq als Fundament faellt aus. Der
+Stooq-Adapter bleibt im Code, er ist getestet und funktioniert von
+einer nicht gesperrten Adresse aus.
+
+Was daraus folgt:
+
+- **Kurse brauchen einen Anbieter mit Schluessel.** Ein Schluessel ist
+  genau das, was einen Abruf von einer geteilten Adresse legitimiert.
+  Naechster Kandidat: Twelve Data, Gratis-Tarif mit 800 Abrufen pro Tag
+  und 8 pro Minute. Ob der Gratis-Tarif auch XETRA abdeckt, ist offen
+  und wird gemessen, nicht geglaubt.
+- **Die SEC ist davon nicht betroffen.** Sie stellt ihre Daten
+  ausdruecklich zur maschinellen Nutzung bereit und verlangt statt
+  eines Schluessels einen User-Agent mit Kontakt-E-Mail. Der
+  Bilanzteil sollte also laufen, sobald SEC_USER_AGENT gesetzt ist.
+- **Der Umweg ueber eine andere Adresse bleibt offen.** Vercel-Funktionen
+  laufen in anderen Netzen als Actions-Runner. Ob Yahoo von dort
+  antwortet, laesst sich pruefen, sobald die App deployt ist.
+
+Die Lehre ist nicht neu, aber sie hat sich bezahlt gemacht: Der Parser
+hat die Bot-Seite abgefangen, statt sie als Kurse zu speichern. Der
+erste Datenlauf hat 40 leere Eintraege mit Begruendung erzeugt und
+keine einzige erfundene Zahl.
