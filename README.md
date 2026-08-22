@@ -3,10 +3,11 @@
 Benachrichtigt ueber Quartalszahlen-Ankuendigungen und Analystenratings zu
 einer festen Watchlist aus 20 Nasdaq- und 20 DAX-Titeln.
 
-Stand: **Slice 0 und 5**. Domaenenmodell, Anbieter-Interfaces, Kurs- und
-Bilanzauswertung, Terminschaetzung und Oberflaeche stehen. Die Oberflaeche
-laeuft noch auf erkennbar erfundenen Demodaten: es wird bislang keine
-externe Schnittstelle abgerufen und keine Datenbank verbunden.
+Stand: **Slice 0 und 5**, plus Ein-Seiten-PDF der Berichte und
+dateibasierter Analysten-Push (Telegram, sobald die Secrets stehen).
+Domaenenmodell, Anbieter-Interfaces, Kurs- und Bilanzauswertung,
+Terminschaetzung und Oberflaeche stehen. Die Oberflaeche nutzt den
+eingefrorenen Snapshot in `data/`, sonst Demodaten.
 
 > Keine Anlageberatung, keine Kaufempfehlung, kein automatischer Handel.
 
@@ -18,6 +19,11 @@ npm test          # Domaenenlogik, ohne Netz
 npm run typecheck
 npm run dev       # Uebersichtsseite unter http://localhost:3000
 ```
+
+Die Uebersicht verlinkt **Geschäftsberichte als PDF** (`/berichte.pdf`,
+eine A4-Seite) und **Analystenmeldungen**. Push fuer neue Rating-Aktionen
+laeuft ueber Telegram, sobald die Secrets gesetzt sind; der erste Abruf
+loest bewusst keine Alerts aus.
 
 ## Zugang
 
@@ -54,13 +60,15 @@ Actions.
 | Pfad | Inhalt |
 | --- | --- |
 | `src/domain/` | Ereignismodell, Idempotency-Key, Ratings-Diff, Matching, 52-Wochen-Auswertung, Bilanzkennzahlen, Terminschaetzung, Punktzahl. Rein, ohne I/O. |
-| `src/providers/` | Anbieter-Interfaces samt Faehigkeitsbeschreibung, Stooq- und XBRL-Adapter, Attrappen. |
-| `src/demo/` | Erfundene Daten fuer die Oberflaeche, bis Slice 6 sie ersetzt. |
-| `src/lib/` | Anzeigeformate, Chart-Geometrie, Sitzungs-Token. |
+| `src/providers/` | Anbieter-Interfaces, Stooq, SEC-XBRL, Yahoo-Ratings, Telegram, Attrappen. |
+| `src/demo/` | Erfundene Daten fuer die Oberflaeche, bis ein Snapshot vorliegt. |
+| `src/lib/` | Anzeigeformate, Chart-Geometrie, Sitzungs-Token, Ein-Seiten-PDF. |
 | `src/middleware.ts` | Passwort-Gate vor allen Routen. |
 | `src/config/watchlist.ts` | Die 40 beobachteten Titel. |
 | `src/db/schema.sql` | Postgres-Schema inklusive Queue-Semantik. Noch nicht migriert. |
 | `scripts/edgar-coverage.ts` | Abdeckungstest gegen EDGAR. |
 | `scripts/data-coverage.ts` | Abdeckungstest fuer Kurse und Bilanzzahlen. |
+| `scripts/fetch-snapshot.ts` | Kurse und Berichtszahlen nach `data/snapshot.json`. |
+| `scripts/poll-ratings.ts` | Analystenhandlungen nach `data/ratings-state.json`, optional Telegram. |
 | `docs/decisions.md` | Getroffene Entscheidungen mit Begruendung. |
 | `AGENTS.md` | Arbeitsregeln. |

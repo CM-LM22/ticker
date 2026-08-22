@@ -86,3 +86,10 @@ Domaene weiss nicht, woher ihre Daten kommen.
 - **4 Ratings-Snapshot** mit Diff.
 
 Kein Slice beginnt, bevor der vorige laeuft.
+
+Datei-Snapshots in `data/` sind die Uebergangsform, solange Neon nicht
+haengt: Kurse/Berichte in `snapshot.json`, Analystenhandlungen in
+`ratings-state.json`. `/berichte.pdf` fasst die juengste Periode aller
+Titel auf eine Seite. Telegram-Push fuer neue Rating-Aktionen laeuft
+ueber denselben Stand, sobald die Secrets gesetzt sind; der Erstlauf
+loest keine Alerts aus. Das nimmt Slice 1/2 nicht vorweg.

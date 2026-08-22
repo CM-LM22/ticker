@@ -19,11 +19,11 @@ export function formatPercent(value: number | null, digits = 1): string {
 }
 
 /** Grosse Betraege gekuerzt: 94.000.000.000 wird zu "94,0 Mrd.". */
-export function formatCompact(value: number | null, currency?: string): string {
+export function formatCompact(value: number | null, currency?: string | null): string {
   if (value === null || !Number.isFinite(value)) return '—'
   const sign = value < 0 ? '−' : ''
   const abs = Math.abs(value)
-  const suffix = currency === undefined ? '' : ` ${currency}`
+  const suffix = currency == null || currency.length === 0 ? '' : ` ${currency}`
 
   if (abs >= 1e12) return `${sign}${formatNumber(abs / 1e12, 2)} Bio.${suffix}`
   if (abs >= 1e9) return `${sign}${formatNumber(abs / 1e9, 2)} Mrd.${suffix}`

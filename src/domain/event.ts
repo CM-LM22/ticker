@@ -6,6 +6,7 @@ export const EventSourceSchema = z.enum([
   'alpha-vantage',
   'finnhub',
   'fmp',
+  'yahoo',
   'manual',
 ])
 export type EventSource = z.infer<typeof EventSourceSchema>

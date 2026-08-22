@@ -245,3 +245,25 @@ Passwort; der Hinweis steht in `.env.example`.
 
 Unberuehrt davon bleibt E5: Das Repository ist oeffentlich, die Website
 ist es nicht. Das sind zwei Schalter.
+
+## E19 Ein-Seiten-PDF und Analysten-Push ohne Datenbank
+
+Gewuenscht sind die juengsten Geschaeftsberichte aller Watchlist-Titel
+auf einer PDF-Seite und eine Push-Nachricht, sobald zu einem Titel eine
+neue Analystenmeldung erscheint.
+
+Berichtszahlen kommen aus dem vorhandenen Snapshot (SEC XBRL). Titel
+ohne SEC-Registrierung stehen als Luecke, nicht als Null. Das PDF ist
+eine Seite A4; die HTML-Ansicht `/berichte` ist dieselbe Tabelle.
+
+Volltexte von Sell-Side-Research sind kostenpflichtig und bleiben draussen.
+Kostenlos sichtbar sind veroeffentlichte Rating-Aktionen. Quelle ist die
+undokumentierte Upgrade-Historie von Yahoo Finance (E13: Ausweichquelle,
+`vendor_claim`). Der erste erfolgreiche Abruf speichert nur den Stand.
+
+Zustellung ueber Telegram, sobald `TELEGRAM_BOT_TOKEN` und
+`TELEGRAM_CHAT_ID` gesetzt sind. Ohne Secrets erscheinen die Meldungen
+nur in der Oberflaeche. Der Stand liegt in `data/ratings-state.json`,
+analog zum Kurssnapshot, bis Slice 1 die Queue in Postgres hat. Das
+ersetzt Slice 1 und 2 nicht; es ist der kleinstmoegliche Weg, die
+Ansicht und den Push jetzt zu haben.

@@ -365,3 +365,39 @@ main.login button {
   color: var(--muted);
   font-size: 0.82rem;
 }
+
+.actions {
+  margin: -1rem 0 1.5rem;
+  font-size: 0.9rem;
+}
+
+table.brief {
+  font-size: 0.82rem;
+}
+
+@media print {
+  .no-print,
+  .logout,
+  .back {
+    display: none;
+  }
+
+  main.brief-page {
+    max-width: none;
+    padding: 0;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  table.brief {
+    font-size: 7.5pt;
+  }
+
+  table.brief th,
+  table.brief td {
+    padding: 0.12rem 0.25rem;
+  }
+}

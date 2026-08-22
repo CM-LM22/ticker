@@ -32,6 +32,12 @@ export default function Home() {
         {withoutPrices > 0 && ` Fuer ${withoutPrices} Titel fehlen auch die Kurse.`}
       </p>
 
+      <p className="actions">
+        <Link href="/berichte">Geschäftsberichte als PDF</Link>
+        {' · '}
+        <Link href="/analysten">Analystenmeldungen</Link>
+      </p>
+
       <DataBanner
         isDemo={isDemo}
         asOf={asOf}
