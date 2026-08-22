@@ -371,6 +371,14 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
       `${ergebnisse.length} verarbeitet, ${fehler} mit Hinweis, ` +
       `${Math.round((Date.now() - startedAt) / 1000)}s`,
   )
+  // Die Hinweise selbst gehoeren ebenfalls ins Protokoll: sie stehen
+  // zwar in refresh_run und im Browser des Ausloesers, aber die
+  // Fehlersuche von aussen braucht sie hier.
+  for (const ergebnis of ergebnisse) {
+    if (ergebnis.note !== null) {
+      console.info(`refresh-hinweis ${ergebnis.ticker}: ${ergebnis.note.slice(0, 220)}`)
+    }
+  }
 
   return NextResponse.json({
     ok: true,
