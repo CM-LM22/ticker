@@ -530,3 +530,19 @@ Tradegate ist undokumentiert und liefert Zahlen im deutschen Format
 ("1.234,56") als Zeichenketten; der Parser behandelt beides defensiv.
 Die Tagesveraenderung kommt aus dem delta-Feld der Quelle, falls
 lesbar, sonst bleibt sie leer.
+
+## E26 Zwei taegliche Cron-Laeufe statt einem
+
+Der Hobby-Tarif erlaubt zwei Cron-Jobs. Beide werden genutzt:
+
+- **04:10 UTC**: nach dem US-Handelsschluss und unmittelbar nach dem
+  Tagesreset von Alpha Vantage (Mitternacht US-Ostkueste). Holt die
+  US-Schlusskurse des Tages und hat das volle XETRA-Kontingent.
+- **06:20 UTC**: vor dem europaeischen Morgen, als Nachzuegler-Lauf
+  fuer alles, was der erste nicht geschafft hat.
+
+Dank der Frische-Regeln kostet ein Lauf, der nichts zu tun hat, nur
+Sekunden und keinerlei Kontingent. Der Anlass war konkret: zwei
+parallel gedrueckte Browser-Laeufe hatten das Alpha-Vantage-Tageslimit
+verbraucht, bevor die 16 DAX-Titel ohne US-Notierung durch waren, und
+der naechste Lauf haette bis 06:20 auf sich warten lassen.
