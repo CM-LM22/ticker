@@ -27,7 +27,11 @@ export default async function BerichtePage() {
 
       <p className="no-print actions">
         <a href="/berichte.pdf">Als PDF herunterladen</a>
-        <span className="muted"> Eine Seite, A4.</span>
+        <span className="muted">
+          {' '}
+          Eine Seite, A4. Je Titel gibt es zusaetzlich einen Ein-Seiten-Bericht mit
+          Vorjahresvergleich, Konsens, Einstufung und Ausblick — Link „PDF“ in der Zeile.
+        </span>
       </p>
 
       <DataBanner
@@ -57,7 +61,10 @@ export default async function BerichtePage() {
                 <Link href={`/titel/${brief.ticker.toLowerCase()}`}>
                   <strong>{brief.ticker}</strong>
                 </Link>
-                <span className="muted"> {brief.name}</span>
+                <span className="muted"> {brief.name} </span>
+                <a className="no-print" href={`/titel/${brief.ticker.toLowerCase()}/bericht.pdf`}>
+                  PDF
+                </a>
               </td>
               {brief.gap !== 'none' ? (
                 <td colSpan={7} className="muted">

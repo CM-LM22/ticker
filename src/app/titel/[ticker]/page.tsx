@@ -56,6 +56,8 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
     <main>
       <p className="back">
         <Link href="/">← Uebersicht</Link>
+        {'  '}
+        <a href={`/titel/${entry.ticker.toLowerCase()}/bericht.pdf`}>Ein-Seiten-Bericht (PDF)</a>
       </p>
 
       <h1>

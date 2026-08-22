@@ -145,6 +145,12 @@ const RICHTUNG_WORT: Record<Richtung, string> = {
   seitwaerts: 'seitwaerts',
 }
 
+const KONFIDENZ_WORT: Record<EarningsEstimate['confidence'], string> = {
+  hoch: 'hohe',
+  mittel: 'mittlere',
+  niedrig: 'niedrige',
+}
+
 function formatTag(day: string): string {
   const [jahr, monat, tag] = day.split('-')
   return `${tag}.${monat}.${jahr}`
@@ -175,7 +181,9 @@ export function ausblickZeilen(input: {
       const deltaPp = letzteMarge - ersteMarge
       const wort =
         deltaPp > 0.5 ? 'verbessert sich' : deltaPp < -0.5 ? 'gibt nach' : 'bleibt stabil'
-      zeilen.push(`Nettomarge ${wort} (${ersteMarge.toFixed(1)} auf ${letzteMarge.toFixed(1)} Prozent).`)
+      zeilen.push(
+        `Nettomarge ${wort} (${ersteMarge.toFixed(1).replace('.', ',')} auf ${letzteMarge.toFixed(1).replace('.', ',')} Prozent).`,
+      )
     }
   } else {
     zeilen.push('Zu wenige Berichtsperioden fuer eine Trendaussage.')
@@ -201,7 +209,7 @@ export function ausblickZeilen(input: {
 
   if (input.earnings !== null) {
     zeilen.push(
-      `Naechste Zahlen voraussichtlich am ${formatTag(input.earnings.expected)} (Schaetzung aus dem Einreichungsrhythmus, ${input.earnings.confidence}e Treffsicherheit).`,
+      `Naechste Zahlen voraussichtlich am ${formatTag(input.earnings.expected)} (Schaetzung aus dem Einreichungsrhythmus, ${KONFIDENZ_WORT[input.earnings.confidence]} Treffsicherheit).`,
     )
   }
 
@@ -282,7 +290,10 @@ export function buildStockBrief(input: StockBriefInput): StockBrief {
     staerken,
     schwaechen,
     ausblick: ausblickZeilen({ quartale, konsens, earnings: input.earnings }),
-    quelleUrl: input.fundamentals?.latest?.period.sourceUrl ?? null,
+    quelleUrl:
+      input.fundamentals?.latest?.period.sourceUrl ??
+      input.fundamentals?.periods[0]?.sourceUrl ??
+      null,
     luecken,
   }
 }
