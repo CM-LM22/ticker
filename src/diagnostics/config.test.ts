@@ -11,6 +11,11 @@ beforeEach(() => {
     'NEON_DATABASE_URL',
     'DATABASE_URL_UNPOOLED',
     'POSTGRES_URL_NON_POOLING',
+    'PGHOST',
+    'PGUSER',
+    'PGPASSWORD',
+    'PGDATABASE',
+    'NEON_API_KEY',
     'TWELVEDATA_API_KEY',
     'SEC_USER_AGENT',
     'CRON_SECRET',
@@ -40,6 +45,33 @@ describe('checkConfiguration', () => {
 
   it('nennt beim Fehlen alle gesuchten Namen', () => {
     expect(finde('DATABASE_URL').hinweis).toContain('POSTGRES_URL')
+    expect(finde('DATABASE_URL').hinweis).toContain('PGHOST')
+  })
+
+  it('setzt die Verbindung aus den Einzelteilen zusammen', () => {
+    // Manche Integrationen setzen keine fertige Zeichenfolge, sondern
+    // nur PGHOST und Co. Ohne das meldet die App "nicht eingerichtet",
+    // obwohl alles da ist.
+    process.env['PGHOST'] = 'ep-beispiel.eu-central-1.aws.neon.tech'
+    process.env['PGUSER'] = 'benutzer'
+    process.env['PGPASSWORD'] = 'wort'
+    process.env['PGDATABASE'] = 'neondb'
+    expect(finde('DATABASE_URL').gesetzt).toBe(true)
+    expect(finde('DATABASE_URL').hinweis).toContain('PGHOST')
+  })
+
+  it('setzt nichts zusammen, wenn ein Einzelteil fehlt', () => {
+    process.env['PGHOST'] = 'host'
+    process.env['PGUSER'] = 'benutzer'
+    // Ohne Passwort waere die Zeichenfolge kaputt statt unvollstaendig.
+    expect(finde('DATABASE_URL').gesetzt).toBe(false)
+  })
+
+  it('nennt beim Scheitern die tatsaechlich gesetzten Namen', () => {
+    process.env['NEON_API_KEY'] = 'irgendwas'
+    const hinweis = finde('DATABASE_URL').hinweis ?? ''
+    expect(hinweis).toContain('NEON_API_KEY')
+    expect(hinweis).not.toContain('irgendwas')
   })
 
   it('findet die Verbindung auch unter dem Namen der Vercel-Integration', () => {

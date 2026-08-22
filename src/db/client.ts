@@ -45,13 +45,48 @@ export interface DatabaseUrlFund {
   url: string
 }
 
-/** Null, wenn keiner der bekannten Namen gesetzt ist. */
+function wert(name: string): string | null {
+  const roh = process.env[name]?.trim()
+  return roh === undefined || roh.length === 0 ? null : roh
+}
+
+/**
+ * Manche Integrationen setzen keine fertige Zeichenfolge, sondern nur
+ * die Einzelteile (PGHOST, PGUSER, PGPASSWORD, PGDATABASE). Dann wird
+ * sie hier zusammengesetzt, statt "nicht eingerichtet" zu melden,
+ * obwohl alles da ist.
+ */
+function ausEinzelteilen(): DatabaseUrlFund | null {
+  const host = wert('PGHOST') ?? wert('POSTGRES_HOST')
+  const user = wert('PGUSER') ?? wert('POSTGRES_USER')
+  const passwort = wert('PGPASSWORD') ?? wert('POSTGRES_PASSWORD')
+  const datenbank = wert('PGDATABASE') ?? wert('POSTGRES_DATABASE')
+  if (host === null || user === null || passwort === null || datenbank === null) return null
+  return {
+    name: 'PGHOST/PGUSER/PGPASSWORD/PGDATABASE',
+    url: `postgres://${encodeURIComponent(user)}:${encodeURIComponent(passwort)}@${host}/${datenbank}?sslmode=require`,
+  }
+}
+
+/** Null, wenn weder ein bekannter Name noch die Einzelteile gesetzt sind. */
 export function resolveDatabaseUrl(): DatabaseUrlFund | null {
   for (const name of DATABASE_URL_CANDIDATES) {
-    const url = process.env[name]?.trim()
-    if (url !== undefined && url.length > 0) return { name, url }
+    const url = wert(name)
+    if (url !== null) return { name, url }
   }
-  return null
+  return ausEinzelteilen()
+}
+
+/**
+ * Namen aller gesetzten Variablen, die nach Datenbank aussehen — nur
+ * Namen, nie Werte. Beantwortet die Frage "wie hat die Integration das
+ * Ding genannt", ohne etwas preiszugeben.
+ */
+export function datenbankVariablenNamen(): string[] {
+  return Object.keys(process.env)
+    .filter((name) => /^(PG|POSTGRES|DATABASE|NEON)/i.test(name))
+    .filter((name) => (process.env[name] ?? '').trim().length > 0)
+    .sort()
 }
 
 let cached: Sql | null = null

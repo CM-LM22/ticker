@@ -6,7 +6,11 @@
  * Schluessel, ueber den man etwas erfaehrt. Wahr oder falsch reicht,
  * um "habe ich alles eingetragen?" zu beantworten.
  */
-import { DATABASE_URL_CANDIDATES, resolveDatabaseUrl } from '../db/client'
+import {
+  DATABASE_URL_CANDIDATES,
+  datenbankVariablenNamen,
+  resolveDatabaseUrl,
+} from '../db/client'
 
 export interface ConfigCheck {
   name: string
@@ -28,7 +32,7 @@ function wert(name: string): string {
  */
 function datenbankPruefung(): ConfigCheck {
   const fund = resolveDatabaseUrl()
-  const gefundene = DATABASE_URL_CANDIDATES.filter((name) => wert(name).length > 0)
+  const vorhanden = datenbankVariablenNamen()
 
   if (fund === null) {
     return {
@@ -36,7 +40,10 @@ function datenbankPruefung(): ConfigCheck {
       gesetzt: false,
       pflicht: true,
       wofuer: 'Speicher fuer Kurse, Berichtszahlen und Meldungen',
-      hinweis: `Keiner dieser Namen ist gesetzt: ${DATABASE_URL_CANDIDATES.join(', ')}. Nach dem Eintragen neu deployen, sonst greift es nicht.`,
+      hinweis:
+        vorhanden.length === 0
+          ? `Keine einzige Datenbankvariable gesetzt. Gesucht wurde nach: ${DATABASE_URL_CANDIDATES.join(', ')} sowie den Einzelteilen PGHOST, PGUSER, PGPASSWORD, PGDATABASE.`
+          : `Gesetzt sind: ${vorhanden.join(', ')} — aber keine davon ergibt eine Verbindung. Bitte diese Namen melden.`,
     }
   }
 
@@ -48,7 +55,7 @@ function datenbankPruefung(): ConfigCheck {
     hinweis:
       fund.name === 'DATABASE_URL'
         ? null
-        : `Gefunden unter ${fund.name}${gefundene.length > 1 ? ` (gesetzt: ${gefundene.join(', ')})` : ''}.`,
+        : `Gefunden unter ${fund.name}. Ebenfalls gesetzt: ${vorhanden.join(', ')}.`,
   }
 }
 
