@@ -22,10 +22,19 @@ describe('WATCHLIST', () => {
     }
   })
 
-  it('laesst CIK und ISIN offen, bis der Abdeckungstest sie belegt', () => {
+  it('laesst die CIK offen, bis der Abdeckungstest sie belegt', () => {
     for (const entry of WATCHLIST) {
       expect(entry.cik).toBeUndefined()
-      expect(entry.isin).toBeUndefined()
+    }
+  })
+
+  it('traegt fuer jeden XETRA-Titel eine ISIN, fuer US-Titel keine', () => {
+    // Die ISINs speisen die Tradegate-Live-Kurse; ihre Richtigkeit
+    // sichert der Plausibilitaets-Waechter zur Laufzeit ab. Das Schema
+    // prueft hier bereits die Form jeder Nummer.
+    for (const entry of WATCHLIST) {
+      if (entry.venue === 'XETRA') expect(entry.isin).toBeDefined()
+      else expect(entry.isin).toBeUndefined()
     }
   })
 })

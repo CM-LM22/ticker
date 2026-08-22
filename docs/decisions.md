@@ -505,3 +505,28 @@ nirgends verdrahtet:
   ist der einzige sichtbare kostenlose Weg zu Berichtszahlen der 16 —
   amtlich, aber nur jaehrlich, und die Zuordnung laeuft ueber LEIs.
   Erst messen, dann bauen.
+
+## E26 Live-Kurse fuer die DAX-Titel ueber Tradegate
+
+Die Diagnose hat zweierlei gemessen: Alpha Vantage liefert XETRA
+(SAP.DEX, 188,12 EUR, 100 Tage) — damit haben alle DAX-Titel
+Tageskurse. Und Tradegate antwortet von Vercel aus ohne Schluessel
+(SAP per ISIN, 186,70). Damit bekommen die deutschen Titel auch
+Live-Kurse; /api/quotes bedient jetzt beide Haelften: Finnhub fuer
+US-Titel, Tradegate fuer XETRA.
+
+Dafuer war eine dokumentierte Ausnahme von E9 noetig: die ISINs der 20
+XETRA-Titel stehen jetzt in der Watchlist. E9 verbietet erfundene
+Kennnummern, weil eine falsche still auf den falschen Titel matcht.
+Die Absicherung ist deshalb nicht Sorgfalt beim Abtippen, sondern ein
+Wachhund zur Laufzeit: Ein Tradegate-Kurs wird nur angezeigt, wenn er
+hoechstens 15 Prozent vom gespeicherten Euro-Tagesschluss (Alpha
+Vantage) abweicht. Zeigt eine ISIN auf ein anderes Unternehmen, faellt
+sein Kurs fast sicher durch diese Pruefung — dann lieber kein Kurs als
+ein falscher. Ohne gespeicherten Schluss (etwa vor dem ersten
+Datenlauf) werden deutsche Live-Kurse gar nicht erst gezeigt.
+
+Tradegate ist undokumentiert und liefert Zahlen im deutschen Format
+("1.234,56") als Zeichenketten; der Parser behandelt beides defensiv.
+Die Tagesveraenderung kommt aus dem delta-Feld der Quelle, falls
+lesbar, sonst bleibt sie leer.

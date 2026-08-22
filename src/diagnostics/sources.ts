@@ -154,11 +154,10 @@ export async function probeSources(): Promise<SourceProbe[]> {
           ok: false,
           detail: 'uebersprungen, ALPHA_VANTAGE_API_KEY nicht gesetzt',
         }),
-    // Zwei Zukunftspfade, nur gemessen, noch nirgends verdrahtet:
-    // Tradegate koennte Live-Kurse deutscher Titel liefern (ohne
-    // Schluessel, per ISIN), filings.xbrl.org die amtlichen
-    // ESEF-Jahresabschluesse der EU-Konzerne. Ob beide von dieser
-    // Adresse aus antworten, entscheidet, ob sich der Ausbau lohnt.
+    // Tradegate speist inzwischen die Live-Kurse der deutschen Titel;
+    // die Probe bleibt als Erreichbarkeitsmessung. filings.xbrl.org
+    // (amtliche ESEF-Jahresabschluesse) ist weiterhin nur gemessen,
+    // noch nirgends verdrahtet.
     pruefe('Tradegate', 'SAP (DE0007164600)', async () => {
       const daten = await json('https://www.tradegate.de/refresh.php?isin=DE0007164600')
       const last = (daten as { last?: unknown }).last

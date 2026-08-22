@@ -435,3 +435,24 @@ export async function lastFundamentalsSuccess(ticker: string): Promise<Date | nu
   if (value === null || value === undefined) return null
   return value instanceof Date ? value : new Date(String(value))
 }
+
+/**
+ * Juengster Schlusskurs je Titel, in einer Abfrage. Dient dem
+ * Plausibilitaets-Waechter der Live-Kurse als Vergleichsbasis.
+ */
+export async function latestCloses(): Promise<Map<string, { close: number; currency: string }>> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT DISTINCT ON (ticker) ticker, close::float8 AS close, currency
+    FROM price_bar
+    ORDER BY ticker, day DESC
+  `) as Record<string, unknown>[]
+  const karte = new Map<string, { close: number; currency: string }>()
+  for (const row of rows) {
+    const close = Number(row['close'])
+    if (Number.isFinite(close) && close > 0) {
+      karte.set(String(row['ticker']), { close, currency: String(row['currency']).trim() })
+    }
+  }
+  return karte
+}
