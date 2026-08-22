@@ -9,7 +9,7 @@ import { summarize52Weeks } from '../domain/price-series'
 import type { PriceSeries, PriceSummary } from '../domain/price-series'
 import { screen } from '../domain/screening'
 import type { ScreenResult } from '../domain/screening'
-import { hasDatabase } from '../db/client'
+import { hasDatabase, istTabelleFehlt } from '../db/client'
 import { lastRefreshAt, loadStoredTitles } from '../db/repository'
 import type { StoredTitle } from '../db/repository'
 
@@ -106,7 +106,13 @@ export async function loadTitlesFromDatabase(): Promise<TitleData | null> {
       fundamentalsSource: 'SEC XBRL',
     }
   } catch (fehler) {
-    console.warn('Datenbank nicht lesbar, weiche auf den Snapshot aus:', fehler)
+    if (istTabelleFehlt(fehler)) {
+      // Noch kein Abruf gelaufen, die Tabellen entstehen beim ersten.
+      // Das ist ein Zustand, kein Fehler, und braucht keinen Stapelabzug.
+      console.info('Tabellen noch nicht angelegt, zeige Demodaten.')
+      return null
+    }
+    console.warn('Datenbank nicht lesbar, zeige Demodaten:', fehler)
     return null
   }
 }

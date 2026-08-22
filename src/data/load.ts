@@ -9,7 +9,7 @@ export async function loadTitleData(): Promise<TitleData> {
   return (await loadTitlesFromDatabase()) ?? loadDemoTitles()
 }
 
-import { hasDatabase } from '../db/client'
+import { hasDatabase, istTabelleFehlt } from '../db/client'
 import { loadRecentAnalystActions, readPollState, RATINGS_POLL_KEY } from '../db/repository'
 import type { StoredAnalystAction } from '../db/repository'
 
@@ -43,6 +43,10 @@ export async function loadAnalystView(): Promise<AnalystView> {
       hasDatabase: true,
     }
   } catch (fehler) {
+    if (istTabelleFehlt(fehler)) {
+      console.info('Analystentabellen noch nicht angelegt.')
+      return leer
+    }
     console.warn('Analystenmeldungen nicht lesbar:', fehler)
     return leer
   }

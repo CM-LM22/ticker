@@ -23,9 +23,14 @@ export type Sql = ReturnType<typeof neon>
  * serverlose Funktionen viele kurze Verbindungen oeffnen.
  */
 export const DATABASE_URL_CANDIDATES = [
+  // NEON_URL steht vorn, weil die Vercel-Neon-Integration sie so
+  // benennt. Liegen aus einer frueheren Verbindung noch andere
+  // Variablen herum, gewinnt trotzdem die aktuelle.
+  'NEON_URL',
   'DATABASE_URL',
   'POSTGRES_URL',
   'NEON_DATABASE_URL',
+  'NEON_POSTGRES_URL',
   'DATABASE_URL_UNPOOLED',
   'POSTGRES_URL_NON_POOLING',
 ] as const
@@ -106,4 +111,17 @@ export function getSql(): Sql {
 
 export function hasDatabase(): boolean {
   return resolveDatabaseUrl() !== null
+}
+
+/**
+ * Postgres meldet eine fehlende Tabelle mit 42P01. Solange noch kein
+ * Abruf gelaufen ist, ist das der Normalzustand und kein Stoerfall.
+ */
+export function istTabelleFehlt(fehler: unknown): boolean {
+  return (
+    typeof fehler === 'object' &&
+    fehler !== null &&
+    'code' in fehler &&
+    (fehler as { code?: unknown }).code === '42P01'
+  )
 }

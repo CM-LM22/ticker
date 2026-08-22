@@ -16,6 +16,8 @@ beforeEach(() => {
     'PGPASSWORD',
     'PGDATABASE',
     'NEON_API_KEY',
+    'NEON_URL',
+    'NEON_POSTGRES_URL',
     'TWELVEDATA_API_KEY',
     'SEC_USER_AGENT',
     'CRON_SECRET',
@@ -82,10 +84,20 @@ describe('checkConfiguration', () => {
     expect(finde('DATABASE_URL').hinweis).toContain('POSTGRES_URL')
   })
 
-  it('bevorzugt DATABASE_URL, wenn mehrere Namen gesetzt sind', () => {
-    process.env['DATABASE_URL'] = 'postgres://a/db'
-    process.env['POSTGRES_URL'] = 'postgres://b/db'
-    expect(finde('DATABASE_URL').hinweis).toBeNull()
+  it('findet die Verbindung unter NEON_URL', () => {
+    process.env['NEON_URL'] = 'postgres://benutzer:wort@host/neondb'
+    expect(finde('DATABASE_URL').gesetzt).toBe(true)
+    expect(finde('DATABASE_URL').hinweis).toContain('NEON_URL')
+  })
+
+  it('bevorzugt NEON_URL vor Resten einer frueheren Verbindung', () => {
+    // Nach einem Wechsel der Datenbank bleiben alte Variablen oft
+    // stehen. Die aktuelle muss gewinnen, sonst schreibt die App
+    // stillschweigend weiter in die alte Datenbank.
+    process.env['NEON_URL'] = 'postgres://neu/db'
+    process.env['DATABASE_URL'] = 'postgres://alt/db'
+    process.env['PGHOST'] = 'alt-host'
+    expect(finde('DATABASE_URL').hinweis).toContain('NEON_URL')
   })
 
   it('verraet die Verbindungszeichenfolge nicht', () => {
