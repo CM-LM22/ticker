@@ -141,5 +141,13 @@ export async function GET(): Promise<NextResponse> {
   })
   const antwort = await laufend
   cache = { antwort, zeit: Date.now() }
+  // Eine Zeile je frischem Abruf (Cache-Treffer loggen nicht): wie
+  // viele Kurse kamen, wie viele Titel fehlen, welcher Hinweis steht
+  // dran. Damit ist "sind die Live-Kurse verbunden" aus dem Protokoll
+  // beantwortbar, ohne hinter das Passwort zu muessen. Nie Werte.
+  console.info(
+    `quotes: ${antwort.quotes.length} Kurse, ${antwort.fehlend.length} fehlend` +
+      (antwort.hinweis === null ? '' : ` | ${antwort.hinweis}`),
+  )
   return NextResponse.json(antwort)
 }
