@@ -391,3 +391,33 @@ Vier Punkte, die beim Zusammenlegen wichtig waren:
 Was in GitHub Actions bleibt: Typpruefung und Tests, der EDGAR-Abdeckungs-
 test und die Quellenmessung. Alle drei messen oder pruefen, keiner holt
 Betriebsdaten. Das ist die Trennlinie.
+
+## E23 In GitHub bleibt nur, was den Code prueft
+
+E22 hat den Datenpfad zusammengelegt, aber zwei Workflows uebersehen:
+den EDGAR-Abdeckungstest und die Quellenmessung. Beide holten Daten aus
+dem Netz, einer committete sein Ergebnis zurueck ins Repository. Nach
+derselben Regel gehoerten auch sie in die Anwendung.
+
+Sie sind jetzt die Seite `/diagnose` mit dem Endpunkt `/api/diagnose`.
+Der misst zweierlei und schreibt nichts:
+
+- **Erreichbarkeit der Quellen.** Stooq, Yahoo, Twelve Data, Finnhub und
+  die SEC, je mit einem US- und einem deutschen Titel.
+- **SEC-Abdeckung je Watchlist-Titel**, stapelweise zu acht, mit
+  Gegenueberstellung von gemessener und erwarteter Einstufung.
+
+Der eigentliche Grund fuer den Umzug ist nicht Ordnungsliebe: Ob eine
+Quelle antwortet, haengt an der Adresse, von der gefragt wird. Die
+Messung aus einem GitHub-Runner beantwortete die falsche Frage. Was
+zaehlt, ist, was *diese Anwendung* von *ihrem* Standort aus erreicht —
+und das kann nur ein Abruf von genau dort beantworten. Der Befund aus
+E20 gilt fuer Actions-Runner; fuer Vercel ist er offen, und `/diagnose`
+ist der Knopf, der ihn beantwortet.
+
+Damit steht in `.github/workflows` genau eine Datei: `ci.yml` mit
+Typpruefung und Tests. Das Verzeichnis `scripts/` ist entfallen.
+
+Die Trennlinie, ab jetzt verbindlich: **GitHub prueft den Code, die
+Anwendung holt die Daten.** Kein Workflow ruft eine externe
+Datenquelle auf, und keiner schreibt ins Repository zurueck.

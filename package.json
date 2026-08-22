@@ -12,8 +12,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "coverage:edgar": "tsx scripts/edgar-coverage.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

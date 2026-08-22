@@ -39,6 +39,8 @@ export default async function Home() {
         <Link href="/berichte">Geschäftsberichte als PDF</Link>
         {' · '}
         <Link href="/analysten">Analystenmeldungen</Link>
+        {' · '}
+        <Link href="/diagnose">Diagnose</Link>
       </p>
 
       <DataBanner

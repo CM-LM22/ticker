@@ -64,21 +64,17 @@ Ohne die Variable ist in der Produktion keine Seite erreichbar; das ist
 Absicht. In der Entwicklung laesst die Middleware ohne Passwort durch.
 Ein Passwortwechsel meldet alle Browser ab.
 
-## Abdeckungstests
+## Diagnose
 
-Beantworten empirisch, was kostenlos ueberhaupt zu bekommen ist. Erst
-EDGAR, dann Kurse und Bilanzzahlen; der zweite Test braucht die CIKs aus
-dem ersten:
+Die Seite `/diagnose` misst, was die Anwendung von ihrem eigenen
+Standort aus erreicht: welche Kursquelle antwortet und welche
+Watchlist-Titel wirklich bei der SEC gefuehrt werden. Sie schreibt
+nichts, sie misst nur.
 
-```sh
-export SEC_USER_AGENT="ticker-alerts/0.1 (deine@adresse.de)"
-npm run coverage:edgar   # -> docs/coverage.md
-npm run coverage:data    # -> docs/data-coverage.md
-```
-
-Ohne User-Agent mit Kontakt-E-Mail antwortet EDGAR mit HTTP 403.
-Alternativ laufen beide als Workflow *Datenabdeckung messen* in GitHub
-Actions.
+Das gehoert bewusst in die Anwendung und nicht in einen Workflow: Ob
+eine Quelle liefert, haengt an der Adresse, von der gefragt wird. Stooq
+und Yahoo sperren geteilte Cloud-Adressen; die Messung aus einem
+GitHub-Runner beantwortet deshalb die falsche Frage.
 
 ## Aufbau
 
@@ -91,8 +87,8 @@ Actions.
 | `src/middleware.ts` | Passwort-Gate vor allen Routen. |
 | `src/config/watchlist.ts` | Die 40 beobachteten Titel. |
 | `src/db/schema.sql` | Postgres-Schema inklusive Queue-Semantik. Noch nicht migriert. |
-| `scripts/edgar-coverage.ts` | Abdeckungstest gegen EDGAR. |
-| `scripts/data-coverage.ts` | Abdeckungstest fuer Kurse und Bilanzzahlen. |
+| `src/diagnostics/` | Erreichbarkeits- und Abdeckungsmessung hinter `/diagnose`. |
+| `src/db/` | Neon-Zugriff, Schema und Speicherschicht. |
 | `scripts/fetch-snapshot.ts` | Kurse und Berichtszahlen nach `data/snapshot.json`. |
 | `scripts/poll-ratings.ts` | Analystenhandlungen nach `data/ratings-state.json`, optional Telegram. |
 | `docs/decisions.md` | Getroffene Entscheidungen mit Begruendung. |

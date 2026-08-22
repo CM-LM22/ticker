@@ -58,8 +58,12 @@ Berichtszahlen und Analystenmeldungen gehen durch denselben Endpunkt
 nach Postgres. Wer eine Quelle hinzufuegt, haengt sie dort ein, nicht in
 einen Workflow, und legt keine zweite Zustandsdatei an.
 
-In Actions bleibt nur, was misst oder prueft: Tests, Typpruefung,
-Abdeckungstests. Nichts davon holt Betriebsdaten.
+**GitHub prueft den Code, die Anwendung holt die Daten.** In
+`.github/workflows` steht genau eine Datei: Typpruefung und Tests. Kein
+Workflow ruft eine externe Datenquelle auf, und keiner schreibt ins
+Repository zurueck. Messungen der Erreichbarkeit gehoeren nach
+`/diagnose`, weil nur ein Abruf vom eigenen Standort die Frage
+beantwortet, die zaehlt.
 
 Zustellung laeuft ueber die Tabelle, nicht ueber den Arbeitsspeicher:
 Neues liegt mit `notified = false` bereit und wird erst nach
