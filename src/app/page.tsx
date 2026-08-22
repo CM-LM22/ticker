@@ -71,13 +71,10 @@ export default async function Home() {
 
   return (
     <main className="uebersicht">
+      {/* Der feste Kopf bleibt bewusst schmal — Titel, Links, Suche —
+          damit die Tabelle den Bildschirm bekommt. Alles Erklaerende
+          lebt im Scrollbereich unter der Tabelle. */}
       <h1>Ticker</h1>
-      <p className="lede">
-        {titles.length} beobachtete Titel, sortiert nach der Kennzahlen-Punktzahl. Bei{' '}
-        {withFundamentals} Titeln liegen Berichtszahlen vor, bei den uebrigen{' '}
-        {titles.length - withFundamentals} nur Kurse: sie sind nicht bei der SEC registriert.
-        {withoutPrices > 0 && ` Fuer ${withoutPrices} Titel fehlen auch die Kurse.`}
-      </p>
 
       <p className="actions">
         <Link href="/berichte">Geschäftsberichte als PDF</Link>
@@ -87,17 +84,21 @@ export default async function Home() {
         <Link href="/diagnose">Diagnose</Link>
       </p>
 
-      <DataBanner
-        isDemo={isDemo}
-        asOf={asOf}
-        priceSource={priceSource}
-        fundamentalsSource={fundamentalsSource}
-      />
-
-      {/* Alles ab hier lebt im Scrollbereich der Tabelle: die Seite
-          selbst scrollt nicht, damit Werkzeugleiste, Spaltenkoepfe und
-          Titelspalte beim Blaettern stehen bleiben. */}
       <OverviewTable rows={rows} asOfText={`Stand ${formatDay(asOf.toISOString().slice(0, 10))}`}>
+        <DataBanner
+          isDemo={isDemo}
+          asOf={asOf}
+          priceSource={priceSource}
+          fundamentalsSource={fundamentalsSource}
+        />
+
+        <p className="muted footnote">
+          {titles.length} beobachtete Titel, sortiert nach der Kennzahlen-Punktzahl. Bei{' '}
+          {withFundamentals} Titeln liegen Berichtszahlen vor, bei den uebrigen{' '}
+          {titles.length - withFundamentals} nur Kurse: sie sind nicht bei der SEC registriert.
+          {withoutPrices > 0 && ` Fuer ${withoutPrices} Titel fehlen auch die Kurse.`}
+        </p>
+
         <p className="muted footnote">
           Die Spalte <em>Punkte</em> nennt hinter dem Punkt den Anteil der Signale, fuer die Daten
           vorlagen. Ein Titel mit 70 · 44&nbsp;% ist auf duennerer Grundlage bewertet als einer mit

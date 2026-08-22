@@ -501,7 +501,16 @@ main.uebersicht {
   height: 100dvh;
   display: flex;
   flex-direction: column;
+  padding-top: 1.25rem;
   padding-bottom: 0.75rem;
+}
+
+main.uebersicht h1 {
+  margin-bottom: 0.1rem;
+}
+
+main.uebersicht .actions {
+  margin: 0.2rem 0 0.8rem;
 }
 
 main.uebersicht .table-scroll {

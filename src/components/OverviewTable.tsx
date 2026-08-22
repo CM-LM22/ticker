@@ -245,9 +245,8 @@ export function OverviewTable({
         </span>
       </div>
 
-      {quoteHinweis !== null && <p className="muted footnote">{quoteHinweis}</p>}
-
       <div className="table-scroll">
+      {quoteHinweis !== null && <p className="muted footnote">{quoteHinweis}</p>}
       <table className="overview">
         <thead>
           <tr>
