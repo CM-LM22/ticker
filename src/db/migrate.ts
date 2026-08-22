@@ -96,6 +96,21 @@ export async function ensureSchema(): Promise<void> {
     )
   `
 
+  // Selbst hinzugefuegte Titel, zusaetzlich zum festen Grundstock im
+  // Code. Die Stammdaten kommen beim Hinzufuegen aus dem offiziellen
+  // SEC-Verzeichnis, nicht aus Nutzereingaben — deshalb reicht der
+  // Ticker als Schluessel und es gibt keine frei erfundenen Felder.
+  await sql`
+    CREATE TABLE IF NOT EXISTS custom_titel (
+      ticker            text PRIMARY KEY,
+      name              text NOT NULL,
+      venue             text NOT NULL CHECK (venue IN ('NASDAQ', 'NYSE')),
+      expected_coverage text NOT NULL,
+      cik               char(10),
+      added_at          timestamptz NOT NULL DEFAULT now()
+    )
+  `
+
   // Analystenkonsens als Monatsstand je Titel. Die Veraenderung
   // zwischen zwei Staenden wird als Meldung in analyst_action gelegt;
   // diese Tabelle haelt nur den Verlauf fuer die Anzeige.

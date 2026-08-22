@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { WATCHLIST } from '@/config/watchlist'
+import { gesamteWatchlist } from '@/data/gesamt-watchlist'
 import { hasDatabase } from '@/db/client'
 import { latestCloses } from '@/db/repository'
 import {
@@ -64,7 +64,7 @@ async function holeAlle(finnhubKey: string): Promise<QuotesAntwort> {
   // Nacheinander, nicht parallel: Dutzende gleichzeitige Abrufe sehen
   // fuer ein Ratenlimit aus wie ein Angriff. Sequenziell dauert es
   // wenige Sekunden und bleibt weit unter den Grenzen beider Quellen.
-  for (const entry of WATCHLIST) {
+  for (const entry of await gesamteWatchlist()) {
     const isin = tradegateEligible(entry)
     if (isin !== null) {
       const basis = schluesse.get(entry.ticker)

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { formatDay, formatDaysUntil, formatNumber, formatPercent } from '@/lib/format'
 
@@ -39,6 +40,20 @@ const TABS = [
   ['XETRA', 'DAX'],
 ] as const
 
+interface SucheTreffer {
+  ticker: string
+  name: string
+  exchange: string
+  imBestand: boolean
+  hinzufuegbar: boolean
+  grund: string | null
+}
+
+interface SucheAntwort {
+  treffer: SucheTreffer[]
+  hinweis: string | null
+}
+
 /**
  * Die Uebersichtstabelle mit Suche, Boersen-Reitern und Live-Kursen.
  *
@@ -48,11 +63,83 @@ const TABS = [
  * die gespeicherten Schlusskurse stehen und der Grund wird angezeigt.
  */
 export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asOfText: string }) {
+  const router = useRouter()
   const [filter, setFilter] = useState('')
   const [tab, setTab] = useState<(typeof TABS)[number][0]>('alle')
   const [quotes, setQuotes] = useState<Map<string, Quote>>(new Map())
   const [quoteStand, setQuoteStand] = useState<string | null>(null)
   const [quoteHinweis, setQuoteHinweis] = useState<string | null>(null)
+  const [sucheTreffer, setSucheTreffer] = useState<SucheTreffer[]>([])
+  const [sucheHinweis, setSucheHinweis] = useState<string | null>(null)
+  const [addStatus, setAddStatus] = useState<string | null>(null)
+  const [addLaeuft, setAddLaeuft] = useState(false)
+
+  // Ab zwei Zeichen fragt die Suche zusaetzlich das SEC-Verzeichnis,
+  // damit sich neue Titel direkt aus dem Suchfeld hinzufuegen lassen.
+  // 400 ms Ruhe vor dem Abruf, sonst je Tastendruck eine Anfrage.
+  useEffect(() => {
+    const suche = filter.trim()
+    if (suche.length < 2) {
+      setSucheTreffer([])
+      setSucheHinweis(null)
+      return
+    }
+    let aktiv = true
+    const timer = setTimeout(() => {
+      void fetch(`/api/suche?q=${encodeURIComponent(suche)}`)
+        .then((antwort) => antwort.json() as Promise<SucheAntwort>)
+        .then((antwort) => {
+          if (!aktiv) return
+          setSucheTreffer(antwort.treffer)
+          setSucheHinweis(antwort.hinweis)
+        })
+        .catch(() => {
+          if (aktiv) setSucheHinweis('Suche gerade nicht erreichbar.')
+        })
+    }, 400)
+    return () => {
+      aktiv = false
+      clearTimeout(timer)
+    }
+  }, [filter])
+
+  async function hinzufuegen(ticker: string): Promise<void> {
+    setAddLaeuft(true)
+    setAddStatus(`${ticker} wird hinzugefuegt …`)
+    try {
+      const antwort = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker }),
+      })
+      const daten = (await antwort.json()) as { ok: boolean; fehler?: string }
+      if (!daten.ok) {
+        setAddStatus(daten.fehler ?? 'Hinzufuegen fehlgeschlagen.')
+        return
+      }
+      // Direkt die Daten des neuen Titels holen. Alle anderen sind
+      // frisch und werden in Millisekunden uebersprungen; hoechstens
+      // drei Runden, falls der Stapel vorher ans Zeitlimit stoesst.
+      setAddStatus(`${ticker} hinzugefuegt, Daten werden geholt …`)
+      let offset = 0
+      for (let runde = 0; runde < 3; runde += 1) {
+        const stapel = await fetch(`/api/refresh?offset=${offset}&limit=40`, { method: 'POST' })
+        const ergebnis = (await stapel.json()) as {
+          done?: boolean
+          naechsterOffset?: number | null
+        }
+        if (ergebnis.done === true || ergebnis.naechsterOffset == null) break
+        offset = ergebnis.naechsterOffset
+      }
+      setAddStatus(`${ticker} ist jetzt in der Watchlist.`)
+      setFilter('')
+      router.refresh()
+    } catch {
+      setAddStatus('Hinzufuegen fehlgeschlagen, bitte nochmal versuchen.')
+    } finally {
+      setAddLaeuft(false)
+    }
+  }
 
   useEffect(() => {
     let aktiv = true
@@ -218,6 +305,44 @@ export function OverviewTable({ rows, asOfText }: { rows: UebersichtZeile[]; asO
 
       {sichtbar.length === 0 && (
         <p className="muted">Kein Titel passt zu dieser Suche.</p>
+      )}
+
+      {addStatus !== null && <p className="footnote">{addStatus}</p>}
+
+      {filter.trim().length >= 2 && (
+        <section className="add-panel">
+          <h2>Neu hinzufuegen</h2>
+          <p className="muted footnote">
+            Treffer aus dem offiziellen SEC-Verzeichnis (Nasdaq und NYSE). Nach dem Hinzufuegen
+            werden Kurse und Berichtszahlen sofort geholt.
+          </p>
+          {sucheHinweis !== null && <p className="muted footnote">{sucheHinweis}</p>}
+          {sucheTreffer.filter((treffer) => !treffer.imBestand).length === 0 &&
+            sucheHinweis === null && (
+              <p className="muted footnote">Kein weiterer Treffer im SEC-Verzeichnis.</p>
+            )}
+          <ul className="add-list">
+            {sucheTreffer
+              .filter((treffer) => !treffer.imBestand)
+              .map((treffer) => (
+                <li key={treffer.ticker}>
+                  <strong>{treffer.ticker}</strong>
+                  <span className="muted"> {treffer.name} · {treffer.exchange}</span>{' '}
+                  {treffer.hinzufuegbar ? (
+                    <button
+                      type="button"
+                      disabled={addLaeuft}
+                      onClick={() => void hinzufuegen(treffer.ticker)}
+                    >
+                      Hinzufuegen
+                    </button>
+                  ) : (
+                    <span className="muted">{treffer.grund}</span>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </section>
       )}
     </>
   )

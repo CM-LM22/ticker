@@ -579,3 +579,23 @@ gespeicherten Zahlen ableitbar ist. Was das Management schreibt, steht
 im verlinkten Original — Prosa erfinden wir nicht. Die Einstufung ist
 ausdruecklich keine Anlageberatung; der Massstab (Schwellen 75/60/45/
 30, Gewichte der Signale) liegt offen im Code und auf der Seite.
+
+## E29 Eigene Titel aus dem SEC-Verzeichnis, Grundstock bleibt im Code
+
+Die 40 fest hinterlegten Titel sind der Grundstock; dazu kommen selbst
+hinzugefuegte Titel in der Tabelle custom_titel. Beim Hinzufuegen wird
+nichts frei eingegeben: Der Client schickt nur das Kuerzel, alle
+Stammdaten (Name, CIK, Handelsplatz) kommen aus dem offiziellen
+SEC-Verzeichnis company_tickers_exchange.json — die Fortsetzung von E9,
+keine erfundenen Kennnummern. Hinzufuegbar sind nur Nasdaq- und
+NYSE-Titel, weil nur dafuer gemessene Gratisquellen existieren; OTC
+und CBOE werden mit Begruendung abgelehnt. Der Grundstock gewinnt bei
+Kollisionen und laesst sich nicht entfernen; eigene Titel schon, ihre
+gespeicherten Kurse bleiben dabei liegen (harmlos, und beim erneuten
+Hinzufuegen sofort wieder da).
+
+Die Suche im Suchfeld der Uebersicht fragt ab zwei Zeichen zusaetzlich
+das SEC-Verzeichnis (im Speicher gehalten, ein Abruf am Tag) und
+bietet Treffer zum Hinzufuegen an; direkt danach laeuft ein
+Datenabruf, bei dem alle frischen Titel in Millisekunden uebersprungen
+werden und nur der neue wirklich holt.

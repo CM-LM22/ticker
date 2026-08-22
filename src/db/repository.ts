@@ -1,4 +1,6 @@
 import type { ReportedPeriod } from '../domain/fundamentals'
+import { WatchlistEntrySchema } from '../domain/instrument'
+import type { WatchlistEntry } from '../domain/instrument'
 import type { PriceBar, PriceSeries } from '../domain/price-series'
 import { getSql } from './client'
 
@@ -455,4 +457,57 @@ export async function latestCloses(): Promise<Map<string, { close: number; curre
     }
   }
   return karte
+}
+
+/**
+ * Selbst hinzugefuegte Titel. Die Stammdaten stammen aus dem
+ * SEC-Verzeichnis; hier wird nur gespeichert und wieder gelesen.
+ */
+export async function loadCustomTitles(): Promise<WatchlistEntry[]> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT ticker, name, venue, expected_coverage, cik
+    FROM custom_titel
+    ORDER BY added_at
+  `) as { ticker: string; name: string; venue: string; expected_coverage: string; cik: string | null }[]
+
+  const eintraege: WatchlistEntry[] = []
+  for (const row of rows) {
+    const geprueft = WatchlistEntrySchema.safeParse({
+      ticker: row.ticker,
+      name: row.name,
+      venue: row.venue,
+      expectedCoverage: row.expected_coverage,
+      ...(row.cik === null ? {} : { cik: row.cik }),
+    })
+    if (geprueft.success) {
+      eintraege.push(geprueft.data)
+    } else {
+      // Eine kaputte Zeile soll nicht die ganze Watchlist reissen.
+      console.warn(`custom_titel ${row.ticker}: Zeile unlesbar, uebersprungen.`)
+    }
+  }
+  return eintraege
+}
+
+export async function addCustomTitle(entry: WatchlistEntry): Promise<void> {
+  const sql = getSql()
+  await sql`
+    INSERT INTO custom_titel (ticker, name, venue, expected_coverage, cik)
+    VALUES (${entry.ticker}, ${entry.name}, ${entry.venue}, ${entry.expectedCoverage}, ${entry.cik ?? null})
+    ON CONFLICT (ticker) DO NOTHING
+  `
+}
+
+/**
+ * Entfernt einen selbst hinzugefuegten Titel. Die gespeicherten Kurse
+ * und Berichtszahlen bleiben liegen: harmlos, und beim erneuten
+ * Hinzufuegen ist die Historie sofort wieder da.
+ */
+export async function removeCustomTitle(ticker: string): Promise<boolean> {
+  const sql = getSql()
+  const rows = (await sql`
+    DELETE FROM custom_titel WHERE ticker = ${ticker} RETURNING ticker
+  `) as { ticker: string }[]
+  return rows.length > 0
 }

@@ -2,7 +2,7 @@ import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { WATCHLIST } from '@/config/watchlist'
+import { gesamteWatchlist } from '@/data/gesamt-watchlist'
 import { ensureSchema } from '@/db/migrate'
 import { hasDatabase, MissingDatabaseUrl } from '@/db/client'
 import {
@@ -336,19 +336,23 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
   await ensureSchema()
 
   const since = new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10)
+  // Grundstock plus selbst hinzugefuegte Titel; die Reihenfolge ist
+  // stabil (Grundstock zuerst, dann nach Hinzufuegedatum), damit
+  // offset-basiertes Fortsetzen weiter funktioniert.
+  const watchlist = await gesamteWatchlist()
   const ergebnisse: Ergebnis[] = []
   const analysten: AnalystAction[] = []
   let position = offset
 
-  while (position < WATCHLIST.length && ergebnisse.length < limit) {
-    const entry = WATCHLIST[position]
+  while (position < watchlist.length && ergebnisse.length < limit) {
+    const entry = watchlist[position]
     if (entry === undefined) break
     ergebnisse.push(await verarbeite(entry, since, analysten))
     position += 1
     if (Date.now() > deadline) break
   }
 
-  const done = position >= WATCHLIST.length
+  const done = position >= watchlist.length
   const fehler = ergebnisse.filter((e) => e.note !== null).length
   const neue = await storeAnalystActions(
     analysten,
@@ -366,7 +370,7 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
   }
 
   console.info(
-    `refresh: ${offset} bis ${position - 1} von ${WATCHLIST.length}, ` +
+    `refresh: ${offset} bis ${position - 1} von ${watchlist.length}, ` +
       `${ergebnisse.length} verarbeitet, ${fehler} mit Hinweis, ` +
       `${Math.round((Date.now() - startedAt) / 1000)}s`,
   )
@@ -384,7 +388,7 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
     verarbeitet: ergebnisse.length,
     naechsterOffset: done ? null : position,
     done,
-    gesamt: WATCHLIST.length,
+    gesamt: watchlist.length,
     neueMeldungen: neue.length,
     zugestellt,
     zustellnote,

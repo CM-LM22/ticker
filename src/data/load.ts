@@ -47,8 +47,8 @@ export async function loadAnalystView(): Promise<AnalystView> {
       loadTrendOverview(),
     ])
     // In Watchlist-Reihenfolge, nicht in der Zufallsreihenfolge der Map.
-    const { WATCHLIST } = await import('../config/watchlist')
-    const trends = WATCHLIST.flatMap((entry) => {
+    const { gesamteWatchlist } = await import('./gesamt-watchlist')
+    const trends = (await gesamteWatchlist()).flatMap((entry) => {
       const paar = trendMap.get(entry.ticker)
       return paar === undefined ? [] : [paar]
     })

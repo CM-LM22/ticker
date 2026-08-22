@@ -1,5 +1,5 @@
-import { WATCHLIST } from '../config/watchlist'
 import { buildDemoTitles, DEMO_AS_OF } from '../demo/demo-data'
+import { gesamteWatchlist } from './gesamt-watchlist'
 import { estimateNextEarnings } from '../domain/earnings-estimate'
 import type { EarningsEstimate } from '../domain/earnings-estimate'
 import { summarizeFundamentals } from '../domain/fundamentals'
@@ -92,8 +92,9 @@ export async function loadTitlesFromDatabase(): Promise<TitleData | null> {
       return null
     }
 
+    const watchlist = await gesamteWatchlist()
     return {
-      titles: WATCHLIST.map((entry) => {
+      titles: watchlist.map((entry) => {
         const found = stored.get(entry.ticker)
         if (found === undefined || found.bars.length === 0) {
           return build(entry, null, found?.periods ?? [], asOf, ['Noch nicht abgerufen.'])

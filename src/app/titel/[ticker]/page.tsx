@@ -2,10 +2,12 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { DataBanner } from '@/components/DataBanner'
 import { Disclaimer } from '@/components/Disclaimer'
+import { EntfernenButton } from '@/components/EntfernenButton'
 import { PriceChart } from '@/components/PriceChart'
 import { QuoteBadge } from '@/components/QuoteBadge'
 import { RangeBar } from '@/components/RangeBar'
 import { WATCHLIST } from '@/config/watchlist'
+import { eigeneTicker } from '@/data/gesamt-watchlist'
 import { loadTitleData } from '@/data/load'
 import { RETURN_WINDOWS, window52Weeks } from '@/domain/price-series'
 import {
@@ -43,7 +45,7 @@ const PERIODICITY_LABEL = {
 
 export default async function TitlePage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params
-  const data = await loadTitleData()
+  const [data, eigene] = await Promise.all([loadTitleData(), eigeneTicker()])
   const title = data.titles.find(
     (candidate) => candidate.entry.ticker.toLowerCase() === ticker.toLowerCase(),
   )
@@ -58,6 +60,12 @@ export default async function TitlePage({ params }: { params: Promise<{ ticker: 
         <Link href="/">← Uebersicht</Link>
         {'  '}
         <a href={`/titel/${entry.ticker.toLowerCase()}/bericht.pdf`}>Ein-Seiten-Bericht (PDF)</a>
+        {eigene.has(entry.ticker) && (
+          <>
+            {'  '}
+            <EntfernenButton ticker={entry.ticker} />
+          </>
+        )}
       </p>
 
       <h1>
