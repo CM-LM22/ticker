@@ -33,7 +33,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // antwortet, und liefert nur wahr oder falsch, nie einen Wert.
     const konfiguration = checkConfiguration()
     try {
-      return NextResponse.json({ ok: true, teil, konfiguration, proben: await probeSources() })
+      const proben = await probeSources()
+      // Zusaetzlich ins Laufzeitprotokoll, damit die Messung auch von
+      // aussen nachvollziehbar ist (Fehlersuche ohne Anmeldung). Nur
+      // Quelle und Befund, nie Schluessel oder Werte.
+      for (const probe of proben) {
+        console.info(
+          `diagnose ${probe.ok ? 'OK  ' : 'FEHLT'} ${probe.quelle} | ${probe.ziel} | ${probe.detail}`,
+        )
+      }
+      console.info(
+        `diagnose konfiguration: ${konfiguration
+          .map((eintrag) => `${eintrag.name}=${eintrag.gesetzt ? 'ja' : 'nein'}`)
+          .join(' ')}`,
+      )
+      return NextResponse.json({ ok: true, teil, konfiguration, proben })
     } catch (fehler) {
       return NextResponse.json(
         { ok: true, teil, konfiguration, proben: [], fehler: message(fehler) },
