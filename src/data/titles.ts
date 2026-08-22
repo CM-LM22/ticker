@@ -12,8 +12,6 @@ import type { ScreenResult } from '../domain/screening'
 import { hasDatabase } from '../db/client'
 import { lastRefreshAt, loadStoredTitles } from '../db/repository'
 import type { StoredTitle } from '../db/repository'
-import { loadSnapshot } from './snapshot'
-import type { SnapshotTitle } from './snapshot'
 
 export interface TitleView {
   entry: WatchlistEntry
@@ -33,23 +31,6 @@ export interface TitleData {
   isDemo: boolean
   priceSource: string
   fundamentalsSource: string
-}
-
-function toSeries(entry: WatchlistEntry, snapshot: SnapshotTitle): PriceSeries | null {
-  if (snapshot.bars.length === 0) return null
-  return {
-    ticker: entry.ticker,
-    currency: snapshot.currency,
-    source: 'snapshot',
-    bars: snapshot.bars.map(([date, open, high, low, close]) => ({
-      date,
-      open,
-      high,
-      low,
-      close,
-      volume: null,
-    })),
-  }
 }
 
 function build(
@@ -92,13 +73,10 @@ function build(
 }
 
 /**
- * Reihenfolge der Quellen: Datenbank, dann Snapshot-Datei, dann
- * Demodaten. Die Oberflaeche fragt nur diese eine Stelle und muss den
- * Unterschied sonst nirgends kennen.
- *
- * Faellt die Datenbank aus, zeigt die App den letzten Snapshot statt
- * einer Fehlerseite. Eine veraltete Uebersicht ist brauchbarer als gar
- * keine, solange der Stand darunter steht.
+ * Die Daten kommen aus der Datenbank. Ist keine angebunden oder noch
+ * nichts abgerufen, zeigt die Oberflaeche Demodaten und sagt das an.
+ * Zwei Quellen, nicht drei: die frueher committete Snapshot-Datei ist
+ * entfallen, mit ihr der zweite Datenpfad.
  */
 export async function loadTitlesFromDatabase(): Promise<TitleData | null> {
   if (!hasDatabase()) return null
@@ -133,37 +111,13 @@ export async function loadTitlesFromDatabase(): Promise<TitleData | null> {
   }
 }
 
-export function loadTitles(): TitleData {
-  const snapshot = loadSnapshot()
-
-  if (snapshot === null) {
-    const demo = buildDemoTitles()
-    return {
-      titles: demo.map((title) => ({ ...title, notes: [] })),
-      asOf: DEMO_AS_OF,
-      isDemo: true,
-      priceSource: 'synthetisch',
-      fundamentalsSource: 'synthetisch',
-    }
-  }
-
-  const asOf = new Date(snapshot.fetchedAt)
-  const byTicker = new Map(snapshot.titles.map((title) => [title.ticker, title]))
-
+/** Rueckfall, solange nichts abgerufen wurde. */
+export function loadDemoTitles(): TitleData {
   return {
-    titles: WATCHLIST.map((entry) => {
-      const found = byTicker.get(entry.ticker)
-      if (found === undefined) {
-        return build(entry, null, [], asOf, ['Im Snapshot nicht enthalten.'])
-      }
-      const notes = [found.priceError, found.fundamentalsError].filter(
-        (note): note is string => note !== null,
-      )
-      return build(entry, toSeries(entry, found), found.periods, asOf, notes)
-    }),
-    asOf,
-    isDemo: false,
-    priceSource: snapshot.priceSource,
-    fundamentalsSource: snapshot.fundamentalsSource,
+    titles: buildDemoTitles().map((title) => ({ ...title, notes: [] })),
+    asOf: DEMO_AS_OF,
+    isDemo: true,
+    priceSource: 'synthetisch',
+    fundamentalsSource: 'synthetisch',
   }
 }

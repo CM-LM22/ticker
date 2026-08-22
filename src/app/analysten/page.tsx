@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import { Disclaimer } from '@/components/Disclaimer'
-import { loadRatingsState } from '@/data/ratings-state'
+import { loadAnalystView } from '@/data/load'
 import { ANALYST_ACTION_LABEL } from '@/domain/analyst-actions'
 import { formatDay } from '@/lib/format'
 
-export const dynamic = 'force-static'
+export const revalidate = 300
 
-export default function AnalystenPage() {
-  const state = loadRatingsState()
-  const asOf = state.fetchedAt === null ? null : state.fetchedAt.slice(0, 10)
+export default async function AnalystenPage() {
+  const state = await loadAnalystView()
+  const asOf = state.fetchedAt === null ? null : state.fetchedAt.toISOString().slice(0, 10)
 
   return (
     <main>
@@ -25,26 +25,25 @@ export default function AnalystenPage() {
 
       {asOf === null ? (
         <p className="demo-banner">
-          <strong>Noch kein Abruf.</strong> Sobald der Workflow <em>Analystenmeldungen holen</em>{' '}
-          gelaufen ist, stehen hier die neuesten Handlungen. Push geht an Telegram, wenn{' '}
-          <code>TELEGRAM_BOT_TOKEN</code> und <code>TELEGRAM_CHAT_ID</code> gesetzt sind.
+          <strong>Noch kein Abruf.</strong> Sobald du in der Uebersicht auf{' '}
+          <em>Daten aktualisieren</em> geklickt hast, stehen hier die neuesten Handlungen. Push
+          geht an Telegram, wenn <code>TELEGRAM_BOT_TOKEN</code> und{' '}
+          <code>TELEGRAM_CHAT_ID</code> gesetzt sind.
         </p>
       ) : (
         <p className="source-banner">
-          Quelle <strong>{state.source}</strong>. Stand {formatDay(asOf)}. {state.alerts.length}{' '}
-          gemerkte Meldungen.
+          Quelle <strong>Yahoo Upgrade-Historie</strong>. Stand {formatDay(asOf)}.{' '}
+          {state.actions.length} gemerkte Meldungen.
         </p>
       )}
 
-      {state.warnings.length > 0 && (
+      {state.note !== null && (
         <ul className="warnings">
-          {state.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
-          ))}
+          <li>{state.note}</li>
         </ul>
       )}
 
-      {state.alerts.length === 0 ? (
+      {state.actions.length === 0 ? (
         <p className="muted">Keine neuen Analystenmeldungen seit dem ersten Abruf.</p>
       ) : (
         <table>
@@ -58,9 +57,9 @@ export default function AnalystenPage() {
             </tr>
           </thead>
           <tbody>
-            {state.alerts.map((alert) => (
+            {state.actions.map((alert) => (
               <tr key={alert.sourceEventId}>
-                <td>{formatDay(alert.occurredAt.slice(0, 10))}</td>
+                <td>{formatDay(alert.occurredAt.toISOString().slice(0, 10))}</td>
                 <td>
                   <Link href={`/titel/${alert.ticker.toLowerCase()}`}>
                     <strong>{alert.ticker}</strong>

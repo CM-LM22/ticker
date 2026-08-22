@@ -4,7 +4,18 @@ import type { NextRequest } from 'next/server'
 import { WATCHLIST } from '@/config/watchlist'
 import { ensureSchema } from '@/db/migrate'
 import { hasDatabase, MissingDatabaseUrl } from '@/db/client'
-import { recordRun, saveBars, savePeriods } from '@/db/repository'
+import {
+  loadUnnotifiedActions,
+  markNotified,
+  recordRun,
+  saveBars,
+  savePeriods,
+  storeAnalystActions,
+} from '@/db/repository'
+import { clipDigestBody, formatAnalystDigest } from '@/domain/analyst-actions'
+import type { AnalystAction } from '@/domain/analyst-actions'
+import { TelegramNotifier, readTelegramConfig } from '@/providers/telegram'
+import { YahooRatingsProvider } from '@/providers/yahoo-ratings'
 import type { ReportedPeriod } from '@/domain/fundamentals'
 import type { WatchlistEntry } from '@/domain/instrument'
 import { CompanyFactsSchema, companyFactsUrl, extractPeriods } from '@/providers/sec-xbrl'
@@ -37,6 +48,7 @@ interface Ergebnis {
   ticker: string
   bars: number
   periods: number
+  actions: number
   note: string | null
 }
 
@@ -84,10 +96,15 @@ async function holeBerichtszahlen(entry: WatchlistEntry): Promise<number> {
   return savePeriods(entry.ticker, periods)
 }
 
-async function verarbeite(entry: WatchlistEntry, since: string): Promise<Ergebnis> {
+async function verarbeite(
+  entry: WatchlistEntry,
+  since: string,
+  gesammelt: AnalystAction[],
+): Promise<Ergebnis> {
   const notizen: string[] = []
   let bars = 0
   let periods = 0
+  let actions = 0
 
   try {
     bars = await holeKurse(entry, since)
@@ -104,9 +121,47 @@ async function verarbeite(entry: WatchlistEntry, since: string): Promise<Ergebni
     }
   }
 
+  try {
+    const items = await new YahooRatingsProvider().fetchHistory(entry)
+    gesammelt.push(...items)
+    actions = items.length
+  } catch (error) {
+    notizen.push(`Analysten: ${message(error)}`)
+  }
+
   const note = notizen.length === 0 ? null : notizen.join(' | ')
   await recordRun(entry.ticker, notizen.length === 0, bars, periods, note)
-  return { ticker: entry.ticker, bars, periods, note }
+  return { ticker: entry.ticker, bars, periods, actions, note }
+}
+
+/**
+ * Zustellung aus der Ausgangspost der Datenbank, nicht aus dem
+ * Arbeitsspeicher dieses Aufrufs. Bricht ein Lauf ab, bleibt die
+ * Meldung liegen und geht beim naechsten Mal raus, statt verloren zu
+ * gehen.
+ */
+async function stelleZu(): Promise<{ zugestellt: number; note: string | null }> {
+  const offen = await loadUnnotifiedActions()
+  if (offen.length === 0) return { zugestellt: 0, note: null }
+
+  const telegram = readTelegramConfig()
+  if (telegram === null) {
+    return { zugestellt: 0, note: 'Telegram nicht eingerichtet, Meldungen nur in der Oberflaeche.' }
+  }
+
+  const digest = formatAnalystDigest(offen)
+  const result = await new TelegramNotifier(telegram.token, telegram.chatId).sendText(
+    digest.title,
+    clipDigestBody(digest.body),
+  )
+  if (!result.ok) {
+    // Nicht als zugestellt markieren: dann geht es beim naechsten Lauf
+    // erneut raus, statt still zu verschwinden.
+    return { zugestellt: 0, note: `Telegram fehlgeschlagen: ${result.error ?? 'unbekannt'}` }
+  }
+
+  await markNotified(offen.map((action) => action.sourceEventId))
+  return { zugestellt: offen.length, note: null }
 }
 
 async function lauf(offset: number, limit: number, deadline: number): Promise<NextResponse> {
@@ -114,12 +169,13 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
 
   const since = new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10)
   const ergebnisse: Ergebnis[] = []
+  const analysten: AnalystAction[] = []
   let position = offset
 
   while (position < WATCHLIST.length && ergebnisse.length < limit) {
     const entry = WATCHLIST[position]
     if (entry === undefined) break
-    ergebnisse.push(await verarbeite(entry, since))
+    ergebnisse.push(await verarbeite(entry, since, analysten))
     position += 1
     // Vor dem Zeitlimit aufhoeren und den Rest dem naechsten Aufruf
     // ueberlassen, statt mitten im Schreiben abgeschnitten zu werden.
@@ -127,7 +183,21 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
   }
 
   const done = position >= WATCHLIST.length
-  if (done) revalidatePath('/', 'layout')
+  const fehler = ergebnisse.filter((e) => e.note !== null).length
+  const neue = await storeAnalystActions(
+    analysten,
+    fehler === 0 ? null : `${fehler} Titel mit Hinweis`,
+    done,
+  )
+
+  let zugestellt = 0
+  let zustellnote: string | null = null
+  if (done) {
+    const zustellung = await stelleZu()
+    zugestellt = zustellung.zugestellt
+    zustellnote = zustellung.note
+    revalidatePath('/', 'layout')
+  }
 
   return NextResponse.json({
     ok: true,
@@ -135,6 +205,9 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
     naechsterOffset: done ? null : position,
     done,
     gesamt: WATCHLIST.length,
+    neueMeldungen: neue.length,
+    zugestellt,
+    zustellnote,
     ergebnisse,
   })
 }

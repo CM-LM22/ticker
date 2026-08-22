@@ -13,10 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage:edgar": "tsx scripts/edgar-coverage.ts",
-    "coverage:data": "tsx scripts/data-coverage.ts",
-    "snapshot": "tsx scripts/fetch-snapshot.ts",
-    "ratings": "tsx scripts/poll-ratings.ts"
+    "coverage:edgar": "tsx scripts/edgar-coverage.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

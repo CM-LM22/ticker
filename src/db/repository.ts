@@ -169,3 +169,159 @@ export async function lastRefreshAt(): Promise<Date | null> {
   if (value === null || value === undefined) return null
   return value instanceof Date ? value : new Date(String(value))
 }
+
+/* --- Analystenhandlungen ------------------------------------------- */
+
+import { selectNewAnalystActions } from '../domain/analyst-actions'
+import type { AnalystAction } from '../domain/analyst-actions'
+import type { RatingAction } from '../domain/event'
+
+export const RATINGS_POLL_KEY = 'analyst-actions'
+
+export interface PollState {
+  initialized: boolean
+  fetchedAt: Date | null
+  note: string | null
+}
+
+export async function readPollState(key: string): Promise<PollState> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT initialized, fetched_at, note FROM poll_state WHERE key = ${key}
+  `) as Record<string, unknown>[]
+  const row = rows[0]
+  if (row === undefined) return { initialized: false, fetchedAt: null, note: null }
+  return {
+    initialized: row['initialized'] === true,
+    fetchedAt: row['fetched_at'] === null ? null : new Date(String(row['fetched_at'])),
+    note: row['note'] === null ? null : String(row['note']),
+  }
+}
+
+export async function writePollState(
+  key: string,
+  initialized: boolean,
+  note: string | null,
+): Promise<void> {
+  const sql = getSql()
+  await sql`
+    INSERT INTO poll_state (key, initialized, fetched_at, note)
+    VALUES (${key}, ${initialized}, now(), ${note})
+    ON CONFLICT (key) DO UPDATE SET
+      initialized = EXCLUDED.initialized,
+      fetched_at = EXCLUDED.fetched_at,
+      note = EXCLUDED.note
+  `
+}
+
+/**
+ * Speichert die abgerufenen Handlungen und gibt zurueck, welche davon
+ * neu sind.
+ *
+ * Gefragt wird nur nach den Fremd-IDs des aktuellen Abrufs, nicht nach
+ * der gesamten Historie: das bleibt auch nach Jahren eine kleine
+ * Abfrage. Die Entscheidung selbst faellt in der reinen Funktion
+ * `selectNewAnalystActions`, damit die Erstlauf-Regel getestet bleibt
+ * und nicht in SQL verschwindet.
+ */
+export async function storeAnalystActions(
+  incoming: readonly AnalystAction[],
+  note: string | null,
+  /**
+   * Nur der letzte Stapel eines Laufs setzt die Marke. Wuerde schon der
+   * erste sie setzen, gaelten die Titel der folgenden Stapel als
+   * "seit dem letzten Mal neu" und der Erstlauf wuerde doch alarmieren.
+   */
+  finalize: boolean,
+): Promise<readonly AnalystAction[]> {
+  const sql = getSql()
+  const state = await readPollState(RATINGS_POLL_KEY)
+
+  let bekannt: ReadonlySet<string> | null = null
+  if (state.initialized) {
+    const ids = incoming.map((action) => action.sourceEventId)
+    const rows =
+      ids.length === 0
+        ? []
+        : ((await sql`
+            SELECT source_event_id FROM analyst_action
+            WHERE source_event_id = ANY(${ids}::text[])
+          `) as Record<string, unknown>[])
+    bekannt = new Set(rows.map((row) => String(row['source_event_id'])))
+  }
+
+  const { newActions } = selectNewAnalystActions(bekannt, incoming)
+
+  for (const action of incoming) {
+    await sql`
+      INSERT INTO analyst_action (
+        source_event_id, ticker, firm, action, grade_from, grade_to, occurred_at, notified
+      ) VALUES (
+        ${action.sourceEventId}, ${action.ticker}, ${action.firm}, ${action.action},
+        ${action.gradeFrom}, ${action.gradeTo}, ${action.occurredAt.toISOString()},
+        ${!state.initialized}
+      )
+      ON CONFLICT (source_event_id) DO NOTHING
+    `
+  }
+
+  if (finalize) await writePollState(RATINGS_POLL_KEY, true, note)
+  return newActions
+}
+
+/**
+ * Die Ausgangspost: gespeicherte Handlungen, die noch nicht zugestellt
+ * wurden. Die Datenbank ist damit das Zustell-Log, und ein
+ * abgebrochener Lauf verliert keine Meldung.
+ */
+export async function loadUnnotifiedActions(limit = 50): Promise<StoredAnalystAction[]> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT source_event_id, ticker, firm, action, grade_from, grade_to,
+           occurred_at, ingested_at
+    FROM analyst_action
+    WHERE NOT notified
+    ORDER BY occurred_at DESC
+    LIMIT ${limit}
+  `) as Record<string, unknown>[]
+  return rows.map(toStoredAction)
+}
+
+export interface StoredAnalystAction extends AnalystAction {
+  ingestedAt: Date
+}
+
+export async function loadRecentAnalystActions(limit = 80): Promise<StoredAnalystAction[]> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT source_event_id, ticker, firm, action, grade_from, grade_to,
+           occurred_at, ingested_at
+    FROM analyst_action
+    ORDER BY occurred_at DESC, ingested_at DESC
+    LIMIT ${limit}
+  `) as Record<string, unknown>[]
+
+  return rows.map(toStoredAction)
+}
+
+function toStoredAction(row: Record<string, unknown>): StoredAnalystAction {
+  return {
+    sourceEventId: String(row['source_event_id']),
+    ticker: String(row['ticker']),
+    firm: String(row['firm']),
+    action: String(row['action']) as RatingAction,
+    gradeFrom: row['grade_from'] === null ? null : String(row['grade_from']),
+    gradeTo: row['grade_to'] === null ? null : String(row['grade_to']),
+    occurredAt: new Date(String(row['occurred_at'])),
+    ingestedAt: new Date(String(row['ingested_at'])),
+  }
+}
+
+export async function markNotified(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return
+  const sql = getSql()
+  await sql`
+    UPDATE analyst_action SET notified = true
+    WHERE source_event_id = ANY(${[...ids]}::text[])
+  `
+}

@@ -353,3 +353,41 @@ Entscheidungen im Detail:
 Der Snapshot-Workflow behaelt seinen Handstart als Notausgang, verliert
 aber seinen Zeitplan. Der Ratings-Poller laeuft vorerst weiter ueber
 Actions; er gehoert beim naechsten Schritt auf denselben Weg.
+
+## E22 Ein Datenpfad, ein Speicher, ein Ausloeser
+
+Nach E21 gab es zwei Wege nebeneinander: Kurse und Berichtszahlen ueber
+`/api/refresh` in die Datenbank, Analystenmeldungen weiter ueber einen
+Actions-Workflow in eine committete JSON-Datei. Zwei Speicher, zwei
+Ausloeser, zwei Rueckfallebenen — und die Oberflaeche musste beide
+kennen. Das ist zusammengelegt.
+
+Alles laeuft jetzt ueber denselben Endpunkt und dieselbe Datenbank:
+
+| war | ist |
+| --- | --- |
+| `scripts/fetch-snapshot.ts` + `snapshot.yml` + `data/snapshot.json` | `/api/refresh` -> `price_bar`, `reported_period` |
+| `scripts/poll-ratings.ts` + `ratings.yml` + `data/ratings-state.json` | `/api/refresh` -> `analyst_action`, `poll_state` |
+| Rueckfall Datenbank, Snapshot, Demodaten | Rueckfall Datenbank, Demodaten |
+
+Vier Punkte, die beim Zusammenlegen wichtig waren:
+
+- **Der Erstlauf darf nicht alarmieren, auch stapelweise nicht.** Die
+  Marke `initialized` wird erst vom letzten Stapel eines Laufs gesetzt.
+  Wuerde schon der erste sie setzen, gaelten die Titel der folgenden
+  Stapel als neu und der Erstlauf loeste doch einen Alarmsturm aus.
+- **Die Datenbank ist die Ausgangspost.** Neue Meldungen liegen mit
+  `notified = false` in `analyst_action`. Zugestellt wird aus der
+  Tabelle, nicht aus dem Arbeitsspeicher des Aufrufs. Bricht ein Lauf
+  ab oder scheitert Telegram, bleibt die Meldung liegen und geht beim
+  naechsten Mal raus, statt verloren zu gehen.
+- **Doppelte Meldungen prallen am Primaerschluessel ab.** `ON CONFLICT
+  DO NOTHING` auf der Fremd-ID ist die zweite Verteidigungslinie hinter
+  `selectNewAnalystActions`. Die reine Funktion bleibt, damit die
+  Erstlauf-Regel getestet ist und nicht in SQL verschwindet.
+- **Gefragt wird nur nach den IDs des aktuellen Abrufs**, nicht nach der
+  ganzen Historie. Das bleibt auch nach Jahren eine kleine Abfrage.
+
+Was in GitHub Actions bleibt: Typpruefung und Tests, der EDGAR-Abdeckungs-
+test und die Quellenmessung. Alle drei messen oder pruefen, keiner holt
+Betriebsdaten. Das ist die Trennlinie.

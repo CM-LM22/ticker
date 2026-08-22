@@ -60,4 +60,39 @@ export async function ensureSchema(): Promise<void> {
   await sql`
     CREATE INDEX IF NOT EXISTS refresh_run_recent_idx ON refresh_run (ticker, finished_at DESC)
   `
+
+  // Analystenhandlungen. Der Primaerschluessel ist die Fremd-ID der
+  // Quelle: doppelte Meldungen prallen an der Datenbank ab, auch wenn
+  // zwei Abrufe gleichzeitig laufen. Das ist die zweite
+  // Verteidigungslinie hinter der Pruefung in der Anwendung.
+  await sql`
+    CREATE TABLE IF NOT EXISTS analyst_action (
+      source_event_id text PRIMARY KEY,
+      ticker          text NOT NULL,
+      firm            text NOT NULL,
+      action          text NOT NULL,
+      grade_from      text,
+      grade_to        text,
+      occurred_at     timestamptz NOT NULL,
+      ingested_at     timestamptz NOT NULL DEFAULT now(),
+      notified        boolean NOT NULL DEFAULT false
+    )
+  `
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS analyst_action_recent_idx
+      ON analyst_action (occurred_at DESC)
+  `
+
+  // Merkposten je Quelle. initialized trennt den Erstlauf von allen
+  // weiteren: ohne diese Unterscheidung waere der erste Abruf ein
+  // Alarmsturm aus jahrealten Meldungen.
+  await sql`
+    CREATE TABLE IF NOT EXISTS poll_state (
+      key         text PRIMARY KEY,
+      initialized boolean NOT NULL DEFAULT false,
+      fetched_at  timestamptz,
+      note        text
+    )
+  `
 }

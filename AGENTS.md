@@ -53,8 +53,18 @@ Ratings kommen als Momentaufnahme, nie als Strom. Der Strom entsteht durch
 ## Woher die Daten kommen
 
 Der Abruf laeuft in der Anwendung (`/api/refresh`), nicht in GitHub
-Actions. Actions macht Typpruefung und Tests. Wer einen Datenabruf
-hinzufuegt, haengt ihn in den Endpunkt, nicht in einen Workflow.
+Actions. Es gibt genau einen Datenpfad und einen Speicher: Kurse,
+Berichtszahlen und Analystenmeldungen gehen durch denselben Endpunkt
+nach Postgres. Wer eine Quelle hinzufuegt, haengt sie dort ein, nicht in
+einen Workflow, und legt keine zweite Zustandsdatei an.
+
+In Actions bleibt nur, was misst oder prueft: Tests, Typpruefung,
+Abdeckungstests. Nichts davon holt Betriebsdaten.
+
+Zustellung laeuft ueber die Tabelle, nicht ueber den Arbeitsspeicher:
+Neues liegt mit `notified = false` bereit und wird erst nach
+erfolgreichem Versand markiert. Ein abgebrochener Lauf darf keine
+Meldung verlieren.
 
 Der Endpunkt arbeitet stapelweise und darf nie annehmen, dass er die
 ganze Watchlist in einem Aufruf schafft. Ein Fehler bei einem Titel hat

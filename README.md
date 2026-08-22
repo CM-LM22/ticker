@@ -32,6 +32,11 @@ Die Anwendung holt ihre Daten selbst. In der Uebersicht sitzt der Knopf
 die Watchlist durch ist. Zusaetzlich stoesst Vercel Cron den Endpunkt
 einmal taeglich an.
 
+Ein Lauf holt alles: Tageskurse, Berichtszahlen aus XBRL und
+oeffentliche Analystenhandlungen. Am Ende geht, sofern eingerichtet, ein
+Telegram-Push mit den neuen Meldungen raus. Der erste Lauf speichert nur
+den Stand und meldet nichts.
+
 Dafuer braucht es in Vercel unter *Settings, Environment Variables*:
 
 | Variable | wofuer |
@@ -40,6 +45,7 @@ Dafuer braucht es in Vercel unter *Settings, Environment Variables*:
 | `TWELVEDATA_API_KEY` | Kurse |
 | `SEC_USER_AGENT` | Berichtszahlen, Form `projekt/0.1 (mail@example.com)` |
 | `CRON_SECRET` | nur damit Vercel Cron ohne Anmeldung durchkommt |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Push bei neuen Analystenmeldungen, optional |
 
 Fehlt `DATABASE_URL`, antwortet der Endpunkt mit 503 und die Oberflaeche
 zeigt weiter den letzten Snapshot beziehungsweise Demodaten.

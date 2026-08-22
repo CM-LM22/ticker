@@ -35,10 +35,6 @@ jobs:
       - name: SEC-Abdeckung messen
         run: npm run coverage:edgar
 
-      # Braucht die CIKs aus dem vorigen Schritt, deshalb danach.
-      - name: Kurse und Bilanzzahlen messen
-        run: npm run coverage:data
-
       - name: Ergebnis committen
         if: ${{ inputs.commit }}
         run: |
