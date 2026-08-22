@@ -36,7 +36,9 @@ import type { CikIndex } from '@/providers/edgar-index'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const DEFAULT_LIMIT = 5
+// Kleiner als frueher: die SEC-Antworten sind gross, und der
+// Gratis-Tarif von Twelve Data erlaubt nur acht Abrufe je Minute.
+const DEFAULT_LIMIT = 4
 const MAX_LIMIT = 10
 /** Historie, die wir vorhalten: 52 Wochen plus Vorlauf fuer den 200-Tage-Schnitt. */
 const HISTORY_DAYS = 420
@@ -184,6 +186,13 @@ async function lauf(offset: number, limit: number, deadline: number): Promise<Ne
 
   const done = position >= WATCHLIST.length
   const fehler = ergebnisse.filter((e) => e.note !== null).length
+  // Eine Zeile je Stapel, damit im Protokoll sichtbar ist, wo ein Lauf
+  // stehenbleibt. Ohne sie sieht man nur, dass nichts mehr kommt.
+  console.info(
+    `refresh: ${offset} bis ${position - 1} von ${WATCHLIST.length}, ` +
+      `${ergebnisse.length} verarbeitet, ${fehler} mit Hinweis, ` +
+      `${Math.round((Date.now() - (deadline - 45_000)) / 1000)}s`,
+  )
   const neue = await storeAnalystActions(
     analysten,
     fehler === 0 ? null : `${fehler} Titel mit Hinweis`,

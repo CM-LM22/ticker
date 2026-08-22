@@ -41,14 +41,27 @@ const FactEntrySchema = z.object({
 })
 type FactEntry = z.infer<typeof FactEntrySchema>
 
+/**
+ * Bewusst nicht das ganze Dokument validieren.
+ *
+ * companyfacts liefert saemtliche jemals getaggten Kennzahlen eines
+ * Unternehmens — bei grossen Emittenten zweistellige Megabyte mit
+ * Zehntausenden Eintraegen. Davon brauchen wir drei Konzepte. Das
+ * gesamte Dokument durch Zod zu schicken kostet Speicher und Sekunden
+ * fuer Daten, die sofort wieder verworfen werden, und hat den
+ * Abrufendpunkt in der Praxis zum Stehen gebracht.
+ *
+ * Stattdessen: Rumpf grob pruefen, dann gezielt die benoetigten
+ * Konzepte herausgreifen und nur deren Eintraege validieren.
+ */
 export const CompanyFactsSchema = z.object({
   cik: z.number(),
   entityName: z.string(),
-  facts: z.record(z.string(), z.record(z.string(), z.object({
-    units: z.record(z.string(), z.array(FactEntrySchema)),
-  }))),
+  facts: z.record(z.string(), z.unknown()),
 })
-export type CompanyFacts = z.infer<typeof CompanyFactsSchema>
+export type CompanyFacts = z.infer<typeof CompanyFactsSchema> & {
+  facts: Record<string, unknown>
+}
 
 /**
  * Nach Prioritaet. Unternehmen taggen denselben Sachverhalt
@@ -113,17 +126,31 @@ interface Selected {
   unit: string
 }
 
-/** Alle Tatsachen des ersten Konzepts, das ueberhaupt Werte liefert. */
+const UnitsSchema = z.object({ units: z.record(z.string(), z.array(z.unknown())) })
+
+/**
+ * Alle Tatsachen des ersten Konzepts, das ueberhaupt Werte liefert.
+ * Validiert wird erst hier, Eintrag fuer Eintrag, und nur fuer die
+ * Konzepte, die wirklich gebraucht werden. Ein einzelner kaputter
+ * Eintrag wird uebersprungen statt den ganzen Abruf zu verwerfen.
+ */
 function selectConcept(facts: CompanyFacts, concepts: readonly string[]): Selected[] {
   for (const concept of concepts) {
     for (const namespace of Object.values(facts.facts)) {
-      const found = namespace[concept]
-      if (found === undefined) continue
+      if (typeof namespace !== 'object' || namespace === null) continue
+      const roh = (namespace as Record<string, unknown>)[concept]
+      if (roh === undefined) continue
+
+      const geprueft = UnitsSchema.safeParse(roh)
+      if (!geprueft.success) continue
+
       const selected: Selected[] = []
-      for (const [unit, entries] of Object.entries(found.units)) {
-        for (const entry of entries) {
-          if (!RELEVANT_FORMS.test(entry.form)) continue
-          selected.push({ entry, unit })
+      for (const [unit, entries] of Object.entries(geprueft.data.units)) {
+        for (const kandidat of entries) {
+          const entry = FactEntrySchema.safeParse(kandidat)
+          if (!entry.success) continue
+          if (!RELEVANT_FORMS.test(entry.data.form)) continue
+          selected.push({ entry: entry.data, unit })
         }
       }
       if (selected.length > 0) return selected
