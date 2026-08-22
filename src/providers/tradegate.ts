@@ -83,6 +83,54 @@ export function quoteIstPlausibel(last: number, gespeicherterSchluss: number): b
   return Math.abs(last / gespeicherterSchluss - 1) <= 0.15
 }
 
+function berlinTeile(now: Date): { tag: string; stunde: number; wochentag: number } {
+  const teile = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    weekday: 'short',
+  }).formatToParts(now)
+  const wert = (typ: string): string => teile.find((teil) => teil.type === typ)?.value ?? ''
+  const wochentage = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  return {
+    tag: `${wert('year')}-${wert('month')}-${wert('day')}`,
+    // Intl liefert Mitternacht mancherorts als "24".
+    stunde: Number(wert('hour')) % 24,
+    wochentag: wochentage.indexOf(wert('weekday')),
+  }
+}
+
+function vorherigerHandelstag(tag: string): string {
+  const datum = new Date(`${tag}T12:00:00Z`)
+  do {
+    datum.setUTCDate(datum.getUTCDate() - 1)
+  } while (datum.getUTCDay() === 0 || datum.getUTCDay() === 6)
+  return datum.toISOString().slice(0, 10)
+}
+
+/**
+ * Welchem Handelstag der aktuelle Tradegate-Kurs als Schlusskurs
+ * gehoert — oder null, wenn die Boerse gerade handelt und es noch
+ * keinen Schluss gibt. Tradegate handelt Mo bis Fr 08:00 bis 22:00
+ * deutscher Zeit; die Rechnung laeuft deshalb in Europe/Berlin.
+ *
+ * Feiertage kennt die Funktion nicht: Nach einem boersenfreien Montag
+ * wird dienstagfrueh der Freitagskurs als Montagsschluss gespeichert —
+ * eine flache Kerze ohne Bewegung, kosmetisch falsch, rechnerisch
+ * harmlos. Ein Feiertagskalender waere die Sorte Pflegeaufwand, die
+ * dieses Projekt vermeidet.
+ */
+export function tradegateSchlussTag(now: Date): string | null {
+  const { tag, stunde, wochentag } = berlinTeile(now)
+  if (wochentag === 0 || wochentag === 6) return vorherigerHandelstag(tag)
+  if (stunde >= 22) return tag
+  if (stunde < 8) return vorherigerHandelstag(tag)
+  return null
+}
+
 /** Nur XETRA-Titel mit hinterlegter ISIN laufen ueber Tradegate. */
 export function tradegateEligible(entry: { venue: Venue; isin?: string | undefined }): string | null {
   if (entry.venue !== 'XETRA') return null

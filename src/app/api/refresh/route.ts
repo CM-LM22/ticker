@@ -8,6 +8,7 @@ import { hasDatabase, MissingDatabaseUrl } from '@/db/client'
 import {
   lastFundamentalsSuccess,
   latestBarDay,
+  latestClose,
   loadUnnotifiedActions,
   markNotified,
   readLatestTrend,
@@ -32,6 +33,11 @@ import {
   recommendationUrl,
 } from '@/providers/finnhub'
 import { CompanyFactsSchema, companyFactsUrl, extractPeriods } from '@/providers/sec-xbrl'
+import {
+  fetchTradegateQuote,
+  quoteIstPlausibel,
+  tradegateSchlussTag,
+} from '@/providers/tradegate'
 import { TwelveDataPriceProvider } from '@/providers/twelvedata'
 import {
   buildCikIndex,
@@ -134,10 +140,63 @@ async function holeKurse(
     return { bars: 0, hinweis: null }
   }
 
-  // XETRA zuerst ueber Alpha Vantage: die einzige gemessen erreichbare
-  // Gratisquelle, die deutsche Titel direkt fuehrt (25 Abrufe am Tag —
-  // genug fuer die DAX-Haelfte, weil die Frische-Regel jeden Titel auf
-  // einen Abruf am Tag begrenzt). Immer das kompakte Fenster von 100
+  // XETRA-Tagespflege zuerst ueber Tradegate: kostenlos und ohne
+  // Kontingent. Der letzte Tradegate-Kurs nach Boersenschluss ist der
+  // Tagesschluss; er wird als flache Kerze gespeichert. Alpha Vantage
+  // (25 Abrufe am Tag) bleibt fuer die Historie beim ersten Abruf,
+  // fuer Luecken von mehr als vier Handelstagen und als Rueckfall —
+  // damit haengt die Zahl der deutschen Titel nicht mehr am
+  // Tageskontingent. Der 15-Prozent-Wachhund gegen eine falsch
+  // zugeordnete ISIN gilt auch hier.
+  let tradegateNotiz: string | null = null
+  if (entry.venue === 'XETRA' && entry.isin !== undefined && neuesterTag !== null) {
+    const schlussTag = tradegateSchlussTag(heute)
+    if (schlussTag !== null) {
+      if (schlussTag <= neuesterTag) {
+        uebersprungen.push('Kurse: seit dem letzten Schluss kein Handelstag')
+        return { bars: 0, hinweis: null }
+      }
+      const lueckeTage = Math.round(
+        (Date.parse(`${schlussTag}T00:00:00Z`) - Date.parse(`${neuesterTag}T00:00:00Z`)) / 86_400_000,
+      )
+      if (lueckeTage <= 4) {
+        try {
+          const basis = await latestClose(entry.ticker)
+          if (basis !== null && basis.currency === 'EUR') {
+            const quote = await fetchTradegateQuote(entry.isin)
+            if (quoteIstPlausibel(quote.last, basis.close)) {
+              const bars = await saveBars(entry.ticker, {
+                ticker: entry.ticker,
+                currency: 'EUR',
+                source: 'tradegate',
+                bars: [
+                  {
+                    date: schlussTag,
+                    open: quote.last,
+                    high: quote.last,
+                    low: quote.last,
+                    close: quote.last,
+                    volume: null,
+                  },
+                ],
+              })
+              return { bars, hinweis: null }
+            }
+            tradegateNotiz = 'Kurs weicht mehr als 15 Prozent vom letzten Schluss ab'
+          } else {
+            tradegateNotiz = 'kein Euro-Schluss als Vergleichsbasis'
+          }
+        } catch (fehler) {
+          tradegateNotiz = message(fehler)
+        }
+      }
+      // faellt auf Alpha Vantage zurueck
+    }
+  }
+
+  // XETRA-Rueckfall und -Erstabruf ueber Alpha Vantage: die einzige
+  // gemessen erreichbare Gratisquelle mit XETRA-Historie (Suffix .DEX,
+  // 25 Abrufe am Tag). Immer das kompakte Fenster von 100
   // Handelstagen: outputsize=full lehnt der Gratis-Tarif inzwischen als
   // Premium-Funktion ab (gemessen 2026-08-22), und 100 Tage reichen fuer
   // Verlauf und Frische; die 52-Wochen-Spanne waechst mit jedem Tag nach.
@@ -149,7 +208,13 @@ async function holeKurse(
       try {
         const provider = new AlphaVantagePriceProvider(alpha, 'compact')
         const series = await provider.fetchDailyHistory({ instrument: entry, since })
-        return { bars: await saveBars(entry.ticker, series), hinweis: null }
+        return {
+          bars: await saveBars(entry.ticker, series),
+          hinweis:
+            tradegateNotiz === null
+              ? null
+              : `Tradegate scheiterte (${tradegateNotiz}), Alpha Vantage lieferte`,
+        }
       } catch (fehler) {
         alphaVantageFehler = message(fehler)
       }

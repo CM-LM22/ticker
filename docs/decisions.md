@@ -599,3 +599,26 @@ das SEC-Verzeichnis (im Speicher gehalten, ein Abruf am Tag) und
 bietet Treffer zum Hinzufuegen an; direkt danach laeuft ein
 Datenabruf, bei dem alle frischen Titel in Millisekunden uebersprungen
 werden und nur der neue wirklich holt.
+
+## E30 Tagesschluss deutscher Titel ueber Tradegate
+
+Die taegliche Kurspflege der XETRA-Titel haengt nicht mehr am
+Alpha-Vantage-Kontingent: Nach Boersenschluss (Mo bis Fr 08:00 bis
+22:00 deutscher Zeit, gerechnet in Europe/Berlin) ist der letzte
+Tradegate-Kurs der Tagesschluss und wird als flache Kerze gespeichert
+— kostenlos und ohne Kontingent. Der 15-Prozent-Wachhund gegen falsch
+zugeordnete ISINs gilt auch hier; ohne Vergleichsbasis wird nichts
+gespeichert.
+
+Alpha Vantage (25 Abrufe am Tag) bleibt fuer drei Faelle: die
+Historie beim ersten Abruf eines Titels, Luecken von mehr als vier
+Handelstagen und den Rueckfall, wenn Tradegate scheitert. Damit ist
+die Zahl der deutschen Titel praktisch nicht mehr begrenzt; das
+Kontingent wird nur noch beim Hinzufuegen und fuer Reparaturen
+angefasst.
+
+Bewusste Unschaerfe: Boersenfeiertage kennt die Regel nicht. Nach
+einem boersenfreien Montag wird dienstagfrueh der Freitagskurs als
+Montagsschluss gespeichert — eine flache Kerze, kosmetisch falsch,
+rechnerisch harmlos (Rendite null). Ein Feiertagskalender waere
+laufender Pflegeaufwand fuer neun Tage im Jahr.

@@ -459,6 +459,25 @@ export async function latestCloses(): Promise<Map<string, { close: number; curre
   return karte
 }
 
+/** Juengster gespeicherter Schlusskurs eines Titels samt Tag. */
+export async function latestClose(
+  ticker: string,
+): Promise<{ day: string; close: number; currency: string } | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT day::text AS day, close::float8 AS close, currency
+    FROM price_bar
+    WHERE ticker = ${ticker}
+    ORDER BY day DESC
+    LIMIT 1
+  `) as { day: string; close: number; currency: string }[]
+  const row = rows[0]
+  if (row === undefined) return null
+  const close = Number(row.close)
+  if (!Number.isFinite(close) || close <= 0) return null
+  return { day: row.day.slice(0, 10), close, currency: row.currency.trim() }
+}
+
 /**
  * Selbst hinzugefuegte Titel. Die Stammdaten stammen aus dem
  * SEC-Verzeichnis; hier wird nur gespeichert und wieder gelesen.
